@@ -233,6 +233,11 @@
     background:var(--teal-tint);color:var(--seal-dark);
     padding:2px 9px;border-radius:2px;font-size:11px;font-weight:600;
   }
+  .logout-btn{
+    background:var(--redd-tint);color:var(--redd);border:1px solid var(--redd);
+    padding:6px 12px;border-radius:var(--radius);font-size:13px;font-weight:600;
+  }
+  .logout-btn:hover{background:var(--redd);color:#fff;}
 
   /* ===== التقرير الأسبوعي ===== */
   .weekly-panel{margin-top:22px;}
@@ -438,8 +443,8 @@ function renderShell(){
         <div class="mast-left">
           <div class="user-chip">
             <span class="user-name">${escapeHtml(state.currentUser.full_name)}</span>
-            <span class="user-role">${escapeHtml(roleDisplayLabel())}</span>
-            <button class="btn-text" id="logoutBtn">خروج</button>
+            ${state.currentUser.role !== 'department' ? `<span class="user-role">${escapeHtml(roleDisplayLabel())}</span>` : ''}
+            <button class="logout-btn" id="logoutBtn">🚪 خروج</button>
           </div>
           <button class="btn-ghost ${EDITOR_ROLES.includes(state.currentUser.role) ? '' : 'hidden'}" id="refreshOverdueBtn">تحديث الحالات المتأخرة</button>
           <span class="mast-date" id="todayDate"></span>
