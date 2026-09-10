@@ -215,6 +215,20 @@
     background:var(--seal-tint);color:var(--seal-dark);
     padding:2px 9px;border-radius:2px;font-size:11px;font-weight:600;
   }
+
+  /* ===== التقرير الأسبوعي ===== */
+  .weekly-panel{margin-top:22px;}
+  .weekly-form textarea{width:100%;min-height:90px;border:1px solid var(--line);border-radius:var(--radius);padding:10px;font-family:inherit;font-size:14px;color:var(--ink);background:var(--paper);resize:vertical;}
+  .weekly-form{padding:16px 18px;border-bottom:1px solid var(--line);}
+  .weekly-form-actions{display:flex;justify-content:space-between;align-items:center;margin-top:10px;}
+  .weekly-week-label{font-size:12px;color:var(--ink-soft);}
+  .report-list{list-style:none;margin:0;padding:0;}
+  .report-list li{padding:14px 18px;border-bottom:1px solid var(--line);}
+  .report-list li:last-child{border-bottom:none;}
+  .report-meta{font-size:12px;color:var(--ink-soft);margin-bottom:4px;}
+  .report-dept{font-weight:600;color:var(--seal-dark);}
+  .report-content{font-size:13px;color:var(--ink);white-space:pre-wrap;}
+  .empty-note{text-align:center;color:var(--ink-soft);padding:24px;font-size:14px;}
 </style>
 </head>
 <body>
@@ -238,9 +252,12 @@ const ROLE_LABELS = {
   department: 'قسم علمي'
 };
 const EDITOR_ROLES = ['admin', 'dean', 'unit_secretary'];
+const INACTIVITY_LIMIT_MS = 30 * 60 * 1000; // 30 دقيقة بدون حركة
+let inactivityTimer = null;
+let inactivityWatcherStarted = false;
 
 let sb = null;
-let state = { tasks:[], decisions:[], departments:[], filterStatus:'all', filterDept:'all', currentUser:null };
+let state = { tasks:[], decisions:[], departments:[], weeklyReports:[], filterStatus:'all', filterDept:'all', currentUser:null };
 
 function isConfigured(){
   return SUPABASE_URL && SUPABASE_URL.startsWith('http') && SUPABASE_ANON_KEY && SUPABASE_ANON_KEY.length > 10;
@@ -280,6 +297,7 @@ async function init(){
 
   renderShell();
   await loadAll();
+  startInactivityWatcher();
 }
 
 async function loadCurrentUser(email){
@@ -297,9 +315,11 @@ function renderLoginScreen(errorMsg){
         <h2>تسجيل الدخول</h2>
         <p>وحدة المتابعة الإدارية — الدخول مخصص لأعضاء الوحدة المسجّلين فقط.</p>
         ${errorMsg ? `<p class="login-error">${escapeHtml(errorMsg)}</p>` : ''}
-        <div class="field"><label>البريد الإلكتروني</label><input id="loginEmail" type="email" autocomplete="username"></div>
-        <div class="field"><label>كلمة المرور</label><input id="loginPassword" type="password" autocomplete="current-password"></div>
-        <button class="btn-primary login-btn" id="loginBtn">تسجيل الدخول</button>
+        <form id="loginForm" autocomplete="on">
+          <div class="field"><label>البريد الإلكتروني</label><input id="loginEmail" name="email" type="email" autocomplete="username"></div>
+          <div class="field"><label>كلمة المرور</label><input id="loginPassword" name="password" type="password" autocomplete="current-password"></div>
+          <button type="submit" class="btn-primary login-btn" id="loginBtn">تسجيل الدخول</button>
+        </form>
         <p class="login-error hidden" id="loginErr"></p>
       </div>
     </div>`;
@@ -319,30 +339,55 @@ function renderLoginScreen(errorMsg){
     await init();
   };
 
-  document.getElementById('loginBtn').onclick = doLogin;
-  document.getElementById('loginPassword').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+  document.getElementById('loginForm').addEventListener('submit', (e)=>{
+    e.preventDefault();
+    doLogin();
+  });
 }
 
 async function logout(){
+  clearTimeout(inactivityTimer);
   await sb.auth.signOut();
   state.currentUser = null;
   renderLoginScreen();
 }
 
+function resetInactivityTimer(){
+  clearTimeout(inactivityTimer);
+  inactivityTimer = setTimeout(async ()=>{
+    clearTimeout(inactivityTimer);
+    await sb.auth.signOut();
+    state.currentUser = null;
+    renderLoginScreen('انتهت الجلسة بسبب عدم النشاط لمدة 30 دقيقة. سجّل الدخول من جديد.');
+  }, INACTIVITY_LIMIT_MS);
+}
+
+function startInactivityWatcher(){
+  if(inactivityWatcherStarted) { resetInactivityTimer(); return; }
+  inactivityWatcherStarted = true;
+  ['click','keydown','mousemove','scroll','touchstart'].forEach(evt=>{
+    document.addEventListener(evt, resetInactivityTimer);
+  });
+  resetInactivityTimer();
+}
+
 async function loadAll(){
-  const [{data:tasks}, {data:decisions}, {data:departments}] = await Promise.all([
+  const [{data:tasks}, {data:decisions}, {data:departments}, {data:weeklyReports}] = await Promise.all([
     sb.from('tasks').select('*').order('created_at', {ascending:false}),
     sb.from('decisions').select('*').eq('status','active').order('decision_date', {ascending:false}),
-    sb.from('departments').select('*').order('name')
+    sb.from('departments').select('*').order('name'),
+    sb.from('weekly_reports').select('*').order('week_start', {ascending:false})
   ]);
   state.tasks = tasks || [];
   state.decisions = decisions || [];
   state.departments = departments || [];
+  state.weeklyReports = weeklyReports || [];
   flagOverdueLocally();
   renderStats();
   renderTasks();
   renderDecisions();
   renderDeptFilter();
+  renderWeeklyPanel();
 }
 
 function flagOverdueLocally(){
@@ -413,6 +458,8 @@ function renderShell(){
           <ul class="decisions-list" id="decisionsList"></ul>
         </aside>
       </main>
+
+      <section class="panel weekly-panel" id="weeklyPanel"></section>
     </div>
     <div id="modalOverlay" class="modal-overlay hidden"></div>
   `;
@@ -536,6 +583,77 @@ function renderDecisions(){
     </li>
   `).join('');
 }
+
+function getWeekStartISO(d = new Date()){
+  const day = d.getDay(); // 0 = الأحد
+  const sunday = new Date(d);
+  sunday.setDate(d.getDate() - day);
+  return sunday.toISOString().slice(0,10);
+}
+
+function renderWeeklyPanel(){
+  const panel = document.getElementById('weeklyPanel');
+  const role = state.currentUser.role;
+  const thisWeek = getWeekStartISO();
+
+  if(role === 'department'){
+    const myReports = state.weeklyReports.filter(r => r.department_id === state.currentUser.department_id);
+    const alreadySubmitted = myReports.some(r => r.week_start === thisWeek);
+
+    panel.innerHTML = `
+      <div class="panel-head"><h2>التقرير الأسبوعي</h2></div>
+      <div class="weekly-form">
+        <p class="weekly-week-label">تقرير الأسبوع الحالي (يبدأ ${thisWeek})</p>
+        <textarea id="weeklyContent" placeholder="اكتب إنجازات الأسبوع، أي معوقات، وملاحظات..."></textarea>
+        <div class="weekly-form-actions">
+          <span class="weekly-week-label">${alreadySubmitted ? '✅ تم إرسال تقرير هذا الأسبوع مسبقًا، بإمكانك إرسال تحديث إضافي.' : ''}</span>
+          <button class="btn-primary" id="submitWeeklyBtn">إرسال التقرير</button>
+        </div>
+      </div>
+      <ul class="report-list">
+        ${myReports.length === 0
+          ? `<li class="empty-note">لا توجد تقارير سابقة مرسلة.</li>`
+          : myReports.map(r => `
+            <li>
+              <div class="report-meta">الأسبوع: ${r.week_start} — أُرسل بتاريخ ${new Date(r.submitted_at).toLocaleDateString('ar-SA')}</div>
+              <div class="report-content">${escapeHtml(r.content || '')}</div>
+            </li>`).join('')
+        }
+      </ul>
+    `;
+
+    document.getElementById('submitWeeklyBtn').onclick = async ()=>{
+      const content = document.getElementById('weeklyContent').value.trim();
+      if(!content) return;
+      await sb.from('weekly_reports').insert({
+        department_id: state.currentUser.department_id,
+        week_start: thisWeek,
+        content
+      });
+      await loadAll();
+    };
+
+  } else {
+    // العميد / الأمين / الأدمن: عرض كل التقارير المرسلة من كل الأقسام
+    panel.innerHTML = `
+      <div class="panel-head"><h2>التقارير الأسبوعية للأقسام</h2></div>
+      <ul class="report-list">
+        ${state.weeklyReports.length === 0
+          ? `<li class="empty-note">لا توجد تقارير مرسلة من الأقسام بعد.</li>`
+          : state.weeklyReports.map(r => `
+            <li>
+              <div class="report-meta">
+                <span class="report-dept">${escapeHtml(deptName(r.department_id))}</span>
+                — الأسبوع: ${r.week_start} — أُرسل بتاريخ ${new Date(r.submitted_at).toLocaleDateString('ar-SA')}
+              </div>
+              <div class="report-content">${escapeHtml(r.content || '')}</div>
+            </li>`).join('')
+        }
+      </ul>
+    `;
+  }
+}
+
 
 function escapeHtml(str){
   const div = document.createElement('div');
