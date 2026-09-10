@@ -72,7 +72,7 @@
     flex-shrink:0;
   }
   .brand-logo{height:56px;width:auto;flex-shrink:0;}
-  .login-logo{height:72px;width:auto;margin:0 auto 16px;display:block;}
+  .login-logo{height:72px;width:auto;margin:0 auto 32px;display:block;}
   .masthead h1{font-size:26px;font-weight:900;color:var(--seal-dark);}
   .mast-sub{margin:4px 0 0;color:var(--ink-soft);font-size:14px;}
   .mast-left{display:flex;flex-direction:column;align-items:flex-end;gap:8px;}
@@ -205,7 +205,8 @@
   /* ===== شاشة تسجيل الدخول ===== */
   .login-screen{max-width:380px;text-align:center;}
   .login-seal{margin:0 auto 16px;}
-  .login-screen h2{margin-bottom:6px;}
+  .login-screen h2{margin-bottom:14px;font-size:15px;color:var(--seal-dark);}
+  .setup-screen p.login-unit-name{font-family:'Noto Kufi Arabic',sans-serif;font-size:24px;font-weight:700;color:var(--seal-dark);margin:0 0 16px;}
   .login-screen .field{text-align:right;}
   .login-btn{width:100%;margin-top:6px;padding:11px;font-size:15px;}
   .login-error{color:var(--redd);font-size:13px;margin-top:10px;}
@@ -320,7 +321,7 @@ function renderLoginScreen(errorMsg){
       <div class="setup-screen login-screen">
         <img src="${LOGO_DATA_URI}" class="login-logo" alt="شعار جامعة القصيم - كلية الشريعة">
         <h2>تسجيل الدخول</h2>
-        <p>وحدة المتابعة الإدارية — الدخول مخصص لأعضاء الوحدة المسجّلين فقط.</p>
+        <p class="login-unit-name">وحدة المتابعة الإدارية</p>
         ${errorMsg ? `<p class="login-error">${escapeHtml(errorMsg)}</p>` : ''}
         <form id="loginForm" autocomplete="on">
           <div class="field"><label>البريد الإلكتروني</label><input id="loginEmail" name="email" type="email" autocomplete="username"></div>
