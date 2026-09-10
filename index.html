@@ -592,6 +592,15 @@ function getWeekStartISO(d = new Date()){
   return sunday.toISOString().slice(0,10);
 }
 
+function sanitizeFileName(name){
+  const lastDot = name.lastIndexOf('.');
+  const ext = lastDot > -1 ? name.slice(lastDot+1).replace(/[^a-zA-Z0-9]/g,'').slice(0,10) : '';
+  const base = (lastDot > -1 ? name.slice(0, lastDot) : name)
+    .replace(/[^a-zA-Z0-9_-]+/g, '_')
+    .slice(0, 60) || 'file';
+  return ext ? `${base}.${ext}` : base;
+}
+
 function renderWeeklyPanel(){
   const panel = document.getElementById('weeklyPanel');
   const role = state.currentUser.role;
@@ -619,7 +628,7 @@ function renderWeeklyPanel(){
             <li>
               <div class="report-meta">الأسبوع: ${r.week_start} — أُرسل بتاريخ ${new Date(r.submitted_at).toLocaleDateString('ar-SA')}</div>
               <div class="report-content">${escapeHtml(r.content || '')}</div>
-              ${r.attachment_path ? `<a href="#" id="attach-${r.id}" class="attach-link">📎 تحميل المرفق</a>` : ''}
+              ${r.attachment_path ? `<a href="#" id="attach-${r.id}" class="attach-link">📎 ${escapeHtml(r.attachment_name || 'تحميل المرفق')}</a>` : ''}
             </li>`).join('')
         }
       </ul>
@@ -631,18 +640,20 @@ function renderWeeklyPanel(){
       if(!content) return;
 
       let attachmentPath = null;
+      let attachmentName = null;
       if(fileInput.files.length > 0){
         const file = fileInput.files[0];
-        const path = `${state.currentUser.department_id}/${Date.now()}_${file.name}`;
+        const path = `${state.currentUser.department_id}/${Date.now()}_${sanitizeFileName(file.name)}`;
         const { error: uploadError } = await sb.storage.from('weekly-attachments').upload(path, file);
-        if(!uploadError) attachmentPath = path;
+        if(!uploadError){ attachmentPath = path; attachmentName = file.name; }
       }
 
       await sb.from('weekly_reports').insert({
         department_id: state.currentUser.department_id,
         week_start: thisWeek,
         content,
-        attachment_path: attachmentPath
+        attachment_path: attachmentPath,
+        attachment_name: attachmentName
       });
       await loadAll();
     };
@@ -661,7 +672,7 @@ function renderWeeklyPanel(){
                 — الأسبوع: ${r.week_start} — أُرسل بتاريخ ${new Date(r.submitted_at).toLocaleDateString('ar-SA')}
               </div>
               <div class="report-content">${escapeHtml(r.content || '')}</div>
-              ${r.attachment_path ? `<a href="#" id="attach-${r.id}" class="attach-link">📎 تحميل المرفق</a>` : ''}
+              ${r.attachment_path ? `<a href="#" id="attach-${r.id}" class="attach-link">📎 ${escapeHtml(r.attachment_name || 'تحميل المرفق')}</a>` : ''}
             </li>`).join('')
         }
       </ul>
