@@ -10,6 +10,16 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@500;700;900&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+  // يضمن جلب أحدث نسخة من الصفحة دائمًا، بغض النظر عن أي تخزين مؤقت بالخوادم
+  (function(){
+    var params = new URLSearchParams(location.search);
+    if(!params.has('_v')){
+      params.set('_v', Date.now());
+      location.replace(location.pathname + '?' + params.toString());
+    }
+  })();
+</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   /* ============================================
