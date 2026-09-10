@@ -89,6 +89,8 @@
   .masthead h1{font-size:26px;font-weight:900;color:var(--seal-dark);}
   .mast-sub{margin:4px 0 0;color:var(--ink-soft);font-size:14px;}
   .mast-left{display:flex;flex-direction:column;align-items:flex-end;gap:8px;}
+  .mast-center{display:flex;align-items:center;gap:10px;}
+  .mast-controls{display:flex;align-items:center;gap:10px;}
   .mast-date{font-size:13px;color:var(--ink-soft);}
 
   .btn-ghost{
@@ -225,10 +227,7 @@
   .login-error{color:var(--redd);font-size:13px;margin-top:10px;}
 
   /* ===== بطاقة المستخدم بالترويسة ===== */
-  .user-chip{
-    display:flex;align-items:center;gap:8px;font-size:13px;
-  }
-  .user-name{font-weight:700;color:var(--seal-dark);font-size:18px;}
+  .user-name{font-weight:700;color:var(--seal-dark);font-size:21px;}
   .user-role{
     background:var(--teal-tint);color:var(--seal-dark);
     padding:2px 9px;border-radius:2px;font-size:11px;font-weight:600;
@@ -440,13 +439,15 @@ function renderShell(){
             <p class="mast-sub">متابعة تنفيذ القرار الإداري وتوصيات اللجان — تقرير مباشر</p>
           </div>
         </div>
+        <div class="mast-center">
+          <span class="user-name">${escapeHtml(state.currentUser.full_name)}</span>
+          ${state.currentUser.role !== 'department' ? `<span class="user-role">${escapeHtml(roleDisplayLabel())}</span>` : ''}
+        </div>
         <div class="mast-left">
-          <div class="user-chip">
-            <span class="user-name">${escapeHtml(state.currentUser.full_name)}</span>
-            ${state.currentUser.role !== 'department' ? `<span class="user-role">${escapeHtml(roleDisplayLabel())}</span>` : ''}
+          <div class="mast-controls">
+            <button class="btn-ghost ${EDITOR_ROLES.includes(state.currentUser.role) ? '' : 'hidden'}" id="refreshOverdueBtn">تحديث الحالات المتأخرة</button>
             <button class="logout-btn" id="logoutBtn">🚪 خروج</button>
           </div>
-          <button class="btn-ghost ${EDITOR_ROLES.includes(state.currentUser.role) ? '' : 'hidden'}" id="refreshOverdueBtn">تحديث الحالات المتأخرة</button>
           <span class="mast-date" id="todayDate"></span>
         </div>
       </header>
