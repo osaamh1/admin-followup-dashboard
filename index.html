@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>وحدة المتابعة الإدارية</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@500;700;900&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  /* ============================================
+     إعدادات الاتصال بـ Supabase — عدّل القيمتين هنا
+     ============================================ */
+  /* سيتم حقن القيم عبر جافاسكربت بالأسفل */
+
+  :root{
+    --ink:#1C2321;
+    --ink-soft:#4A524E;
+    --paper:#EEEEE5;
+    --paper-raised:#F7F7F1;
+    --line:#D7D3C5;
+    --seal:#1F4E3D;
+    --seal-dark:#153a2d;
+    --seal-tint:#E3EAE4;
+    --amber:#9C6B1E;
+    --amber-tint:#F1E7D3;
+    --rust:#A3502B;
+    --rust-tint:#F2E1D5;
+    --redd:#93362F;
+    --redd-tint:#F1DDDA;
+    --green:#2D6A4C;
+    --green-tint:#DEEAE2;
+    --radius:3px;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'IBM Plex Sans Arabic', sans-serif;
+    line-height:1.6;
+    min-height:100vh;
+  }
+  h1,h2,h3{
+    font-family:'Noto Kufi Arabic', sans-serif;
+    margin:0;
+  }
+  button{font-family:inherit;cursor:pointer;}
+  select,input,textarea{font-family:inherit;}
+
+  .page{max-width:1180px;margin:0 auto;padding:28px 24px 60px;}
+
+  /* ===== الترويسة ===== */
+  .masthead{
+    display:flex;justify-content:space-between;align-items:flex-end;
+    border-bottom:3px solid var(--seal);
+    padding-bottom:18px;margin-bottom:22px;
+    gap:16px;flex-wrap:wrap;
+  }
+  .mast-right{display:flex;align-items:center;gap:16px;}
+  .seal-badge{
+    width:56px;height:56px;border-radius:50%;
+    background:var(--seal);color:#fff;
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Noto Kufi Arabic', sans-serif;
+    font-weight:700;font-size:15px;
+    border:2px solid var(--seal-dark);
+    flex-shrink:0;
+  }
+  .masthead h1{font-size:26px;font-weight:900;color:var(--seal-dark);}
+  .mast-sub{margin:4px 0 0;color:var(--ink-soft);font-size:14px;}
+  .mast-left{display:flex;flex-direction:column;align-items:flex-end;gap:8px;}
+  .mast-date{font-size:13px;color:var(--ink-soft);}
+
+  .btn-ghost{
+    background:transparent;border:1px solid var(--ink-soft);color:var(--ink-soft);
+    padding:7px 14px;border-radius:var(--radius);font-size:13px;
+  }
+  .btn-ghost:hover{border-color:var(--seal);color:var(--seal-dark);}
+  .btn-primary{
+    background:var(--seal);color:#fff;border:none;
+    padding:9px 16px;border-radius:var(--radius);font-size:14px;font-weight:600;
+  }
+  .btn-primary:hover{background:var(--seal-dark);}
+  .btn-text{background:none;border:none;color:var(--seal-dark);font-size:13px;text-decoration:underline;padding:0;}
+
+  /* ===== تنبيه ===== */
+  .alert-banner{
+    background:var(--redd-tint);border-right:4px solid var(--redd);
+    color:var(--redd);padding:12px 16px;border-radius:var(--radius);
+    margin-bottom:20px;font-size:14px;
+  }
+  .alert-banner strong{font-family:'Noto Kufi Arabic',sans-serif;}
+  .hidden{display:none !important;}
+
+  /* ===== شريط المؤشرات ===== */
+  .stat-strip{
+    display:flex;background:var(--paper-raised);
+    border:1px solid var(--line);border-radius:var(--radius);
+    margin-bottom:24px;overflow:hidden;
+  }
+  .stat{
+    flex:1;text-align:center;padding:16px 8px;
+    border-left:1px solid var(--line);
+  }
+  .stat:last-child{border-left:none;}
+  .stat-num{
+    display:block;font-family:'Noto Kufi Arabic',sans-serif;
+    font-size:28px;font-weight:700;color:var(--seal-dark);
+  }
+  .stat-label{font-size:13px;color:var(--ink-soft);}
+  .stat.is-late .stat-num{color:var(--rust);}
+  .stat.is-stuck .stat-num{color:var(--redd);}
+  .stat.is-done .stat-num{color:var(--green);}
+
+  /* ===== التخطيط الرئيسي ===== */
+  .layout{display:grid;grid-template-columns:1fr 300px;gap:22px;align-items:start;}
+  @media(max-width:860px){.layout{grid-template-columns:1fr;}}
+
+  .panel{background:var(--paper-raised);border:1px solid var(--line);border-radius:var(--radius);}
+  .panel-head{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:14px 18px;border-bottom:1px solid var(--line);gap:12px;flex-wrap:wrap;
+  }
+  .panel-head h2{font-size:17px;color:var(--seal-dark);}
+  .filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  .filters select{
+    border:1px solid var(--line);border-radius:var(--radius);
+    padding:6px 8px;font-size:13px;background:#fff;color:var(--ink);
+  }
+
+  /* ===== جدول المهام ===== */
+  table.tasks-table{width:100%;border-collapse:collapse;font-size:14px;}
+  .tasks-table th{
+    text-align:right;padding:10px 14px;font-size:12px;color:var(--ink-soft);
+    font-weight:600;border-bottom:1px solid var(--line);
+  }
+  .tasks-table td{padding:12px 14px;border-bottom:1px solid var(--line);vertical-align:top;}
+  .tasks-table tr:last-child td{border-bottom:none;}
+  .task-title{font-weight:600;}
+  .task-meta{font-size:12px;color:var(--ink-soft);margin-top:2px;}
+  .empty-row td{text-align:center;color:var(--ink-soft);padding:34px;font-size:14px;}
+
+  .badge{
+    display:inline-block;padding:4px 10px;border-radius:2px;
+    font-size:12px;font-weight:600;border-right:3px solid transparent;
+  }
+  .badge.st-جارية{background:var(--amber-tint);color:var(--amber);border-color:var(--amber);}
+  .badge.st-منتهية{background:var(--green-tint);color:var(--green);border-color:var(--green);}
+  .badge.st-متأخرة{background:var(--rust-tint);color:var(--rust);border-color:var(--rust);}
+  .badge.st-متعثرة{background:var(--redd-tint);color:var(--redd);border-color:var(--redd);}
+
+  select.status-select{
+    border:1px solid var(--line);border-radius:var(--radius);
+    padding:5px 6px;font-size:12px;background:#fff;color:var(--ink);
+  }
+
+  /* ===== سجل القرارات ===== */
+  .decisions-list{list-style:none;margin:0;padding:0;}
+  .decisions-list li{
+    padding:14px 18px;border-bottom:1px solid var(--line);
+  }
+  .decisions-list li:last-child{border-bottom:none;}
+  .dec-title{font-weight:600;font-size:14px;}
+  .dec-date{font-size:12px;color:var(--ink-soft);margin-top:4px;}
+  .dec-desc{font-size:13px;color:var(--ink-soft);margin-top:6px;}
+
+  /* ===== نافذة منبثقة ===== */
+  .modal-overlay{
+    position:fixed;inset:0;background:rgba(28,35,33,0.5);
+    display:flex;align-items:center;justify-content:center;z-index:50;padding:16px;
+  }
+  .modal{
+    background:#fff;border-radius:var(--radius);padding:24px;
+    width:100%;max-width:440px;max-height:90vh;overflow-y:auto;
+  }
+  .modal h3{font-size:18px;color:var(--seal-dark);margin-bottom:16px;}
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-size:13px;color:var(--ink-soft);margin-bottom:5px;}
+  .field input,.field textarea,.field select{
+    width:100%;border:1px solid var(--line);border-radius:var(--radius);
+    padding:8px 10px;font-size:14px;color:var(--ink);background:var(--paper);
+  }
+  .field textarea{resize:vertical;min-height:70px;}
+  .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px;}
+
+  /* ===== شاشة الإعداد ===== */
+  .setup-screen{
+    max-width:560px;margin:60px auto;background:var(--paper-raised);
+    border:1px solid var(--line);border-radius:var(--radius);padding:30px;
+  }
+  .setup-screen h2{color:var(--seal-dark);margin-bottom:12px;}
+  .setup-screen p{color:var(--ink-soft);font-size:14px;}
+  .setup-screen code{
+    display:block;background:var(--paper);padding:10px;border-radius:var(--radius);
+    font-size:13px;margin:10px 0;direction:ltr;text-align:left;
+  }
+
+  /* ===== شاشة تسجيل الدخول ===== */
+  .login-screen{max-width:380px;text-align:center;}
+  .login-seal{margin:0 auto 16px;}
+  .login-screen h2{margin-bottom:6px;}
+  .login-screen .field{text-align:right;}
+  .login-btn{width:100%;margin-top:6px;padding:11px;font-size:15px;}
+  .login-error{color:var(--redd);font-size:13px;margin-top:10px;}
+
+  /* ===== بطاقة المستخدم بالترويسة ===== */
+  .user-chip{
+    display:flex;align-items:center;gap:8px;font-size:13px;
+  }
+  .user-name{font-weight:600;color:var(--ink);}
+  .user-role{
+    background:var(--seal-tint);color:var(--seal-dark);
+    padding:2px 9px;border-radius:2px;font-size:11px;font-weight:600;
+  }
+</style>
+</head>
+<body>
+
+<div id="app"></div>
+
+<script>
+/* ============================================
+   1) عدّل هذين السطرين ببيانات مشروعك في Supabase
+   Project Settings → API
+   ============================================ */
+const SUPABASE_URL = 'https://aatofmnhbolpyhhuhtnu.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFhdG9mbW5oYm9scHloaHVodG51Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwMzM3OTksImV4cCI6MjEwNDYwOTc5OX0.WLOpuM1eWmGTB32-kKtjvr-c63vUABz0PTgoFik5V2A';
+
+const STATUSES = ['جارية','منتهية','متأخرة','متعثرة'];
+const ROLE_LABELS = {
+  admin: 'مشرف النظام',
+  dean: 'عميد الكلية',
+  unit_secretary: 'أمين الوحدة',
+  member: 'عضو اللجنة',
+  department: 'قسم علمي'
+};
+const EDITOR_ROLES = ['admin', 'dean', 'unit_secretary'];
+
+let sb = null;
+let state = { tasks:[], decisions:[], departments:[], filterStatus:'all', filterDept:'all', currentUser:null };
+
+function isConfigured(){
+  return SUPABASE_URL && SUPABASE_URL.startsWith('http') && SUPABASE_ANON_KEY && SUPABASE_ANON_KEY.length > 10;
+}
+
+function renderSetupScreen(){
+  document.getElementById('app').innerHTML = `
+    <div class="page">
+      <div class="setup-screen">
+        <h2>الاتصال غير مُهيّأ بعد</h2>
+        <p>افتح هذا الملف بمحرر نصوص، وعدّل القيمتين التاليتين بأعلى الكود ببيانات مشروعك في Supabase (من Project Settings → API):</p>
+        <code>const SUPABASE_URL = 'https://xxxx.supabase.co';<br>const SUPABASE_ANON_KEY = 'eyJhbGciOi...';</code>
+        <p>بعد الحفظ، أعد فتح الصفحة.</p>
+      </div>
+    </div>`;
+}
+
+async function init(){
+  if(!isConfigured()){ renderSetupScreen(); return; }
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const { data: { session } } = await sb.auth.getSession();
+  if(!session){
+    renderLoginScreen();
+    return;
+  }
+
+  const ok = await loadCurrentUser(session.user.email);
+  if(!ok){
+    renderLoginScreen('هذا الحساب غير مسجّل بقائمة أعضاء الوحدة. تواصل مع مشرف النظام.');
+    await sb.auth.signOut();
+    return;
+  }
+
+  const { data: departments } = await sb.from('departments').select('*').order('name');
+  state.departments = departments || [];
+
+  renderShell();
+  await loadAll();
+}
+
+async function loadCurrentUser(email){
+  const { data, error } = await sb.from('app_users').select('*').eq('email', email).maybeSingle();
+  if(error || !data) return false;
+  state.currentUser = data;
+  return true;
+}
+
+function renderLoginScreen(errorMsg){
+  document.getElementById('app').innerHTML = `
+    <div class="page">
+      <div class="setup-screen login-screen">
+        <div class="seal-badge login-seal">و.م.إ</div>
+        <h2>تسجيل الدخول</h2>
+        <p>وحدة المتابعة الإدارية — الدخول مخصص لأعضاء الوحدة المسجّلين فقط.</p>
+        ${errorMsg ? `<p class="login-error">${escapeHtml(errorMsg)}</p>` : ''}
+        <div class="field"><label>البريد الإلكتروني</label><input id="loginEmail" type="email" autocomplete="username"></div>
+        <div class="field"><label>كلمة المرور</label><input id="loginPassword" type="password" autocomplete="current-password"></div>
+        <button class="btn-primary login-btn" id="loginBtn">تسجيل الدخول</button>
+        <p class="login-error hidden" id="loginErr"></p>
+      </div>
+    </div>`;
+
+  const doLogin = async ()=>{
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    const errEl = document.getElementById('loginErr');
+    errEl.classList.add('hidden');
+    if(!email || !password) return;
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if(error){
+      errEl.textContent = 'بيانات الدخول غير صحيحة. تأكد من الإيميل وكلمة المرور.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+    await init();
+  };
+
+  document.getElementById('loginBtn').onclick = doLogin;
+  document.getElementById('loginPassword').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+}
+
+async function logout(){
+  await sb.auth.signOut();
+  state.currentUser = null;
+  renderLoginScreen();
+}
+
+async function loadAll(){
+  const [{data:tasks}, {data:decisions}, {data:departments}] = await Promise.all([
+    sb.from('tasks').select('*').order('created_at', {ascending:false}),
+    sb.from('decisions').select('*').eq('status','active').order('decision_date', {ascending:false}),
+    sb.from('departments').select('*').order('name')
+  ]);
+  state.tasks = tasks || [];
+  state.decisions = decisions || [];
+  state.departments = departments || [];
+  flagOverdueLocally();
+  renderStats();
+  renderTasks();
+  renderDecisions();
+  renderDeptFilter();
+}
+
+function flagOverdueLocally(){
+  const today = new Date().toISOString().slice(0,10);
+  state.tasks.forEach(t=>{
+    if(t.status === 'جارية' && t.due_date && t.due_date < today){
+      t._displayStatus = 'متأخرة';
+    } else {
+      t._displayStatus = t.status;
+    }
+  });
+}
+
+function renderShell(){
+  document.getElementById('app').innerHTML = `
+    <div class="page">
+      <header class="masthead">
+        <div class="mast-right">
+          <div class="seal-badge">و.م.إ</div>
+          <div>
+            <h1>وحدة المتابعة الإدارية</h1>
+            <p class="mast-sub">متابعة تنفيذ القرار الإداري وتوصيات اللجان — تقرير مباشر</p>
+          </div>
+        </div>
+        <div class="mast-left">
+          <div class="user-chip">
+            <span class="user-name">${escapeHtml(state.currentUser.full_name)}</span>
+            <span class="user-role">${escapeHtml(roleDisplayLabel())}</span>
+            <button class="btn-text" id="logoutBtn">خروج</button>
+          </div>
+          <button class="btn-ghost ${EDITOR_ROLES.includes(state.currentUser.role) ? '' : 'hidden'}" id="refreshOverdueBtn">تحديث الحالات المتأخرة</button>
+          <span class="mast-date" id="todayDate"></span>
+        </div>
+      </header>
+
+      <section id="alertBanner" class="alert-banner hidden"></section>
+
+      <section class="stat-strip" id="statStrip"></section>
+
+      <main class="layout">
+        <section class="panel tasks-panel">
+          <div class="panel-head">
+            <h2>سجل المهام</h2>
+            <div class="filters">
+              <select id="filterStatus">
+                <option value="all">كل الحالات</option>
+                ${STATUSES.map(s=>`<option value="${s}">${s}</option>`).join('')}
+              </select>
+              <select id="filterDept"><option value="all">كل الأقسام</option></select>
+              <button class="btn-primary ${EDITOR_ROLES.includes(state.currentUser.role) ? '' : 'hidden'}" id="addTaskBtn">+ مهمة جديدة</button>
+            </div>
+          </div>
+          <table class="tasks-table">
+            <thead>
+              <tr>
+                <th>المهمة</th><th>القسم</th><th>المسؤول</th><th>الاستحقاق</th><th>الحالة</th>
+              </tr>
+            </thead>
+            <tbody id="tasksBody"></tbody>
+          </table>
+        </section>
+
+        <aside class="panel decisions-panel">
+          <div class="panel-head">
+            <h2>سجل القرارات</h2>
+            <button class="btn-text ${EDITOR_ROLES.includes(state.currentUser.role) ? '' : 'hidden'}" id="addDecisionBtn">+ قرار</button>
+          </div>
+          <ul class="decisions-list" id="decisionsList"></ul>
+        </aside>
+      </main>
+    </div>
+    <div id="modalOverlay" class="modal-overlay hidden"></div>
+  `;
+
+  document.getElementById('todayDate').textContent = new Intl.DateTimeFormat('ar-SA',{year:'numeric',month:'long',day:'numeric'}).format(new Date());
+  document.getElementById('refreshOverdueBtn').onclick = refreshOverdue;
+  document.getElementById('filterStatus').onchange = e=>{ state.filterStatus = e.target.value; renderTasks(); };
+  document.getElementById('filterDept').onchange = e=>{ state.filterDept = e.target.value; renderTasks(); };
+  document.getElementById('addTaskBtn').onclick = openAddTaskModal;
+  document.getElementById('addDecisionBtn').onclick = openAddDecisionModal;
+  document.getElementById('logoutBtn').onclick = logout;
+}
+
+async function refreshOverdue(){
+  await sb.rpc('auto_flag_overdue_tasks');
+  await loadAll();
+}
+
+function renderStats(){
+  const total = state.tasks.length;
+  const count = s => state.tasks.filter(t=>t._displayStatus===s).length;
+  const ongoing = count('جارية'), late = count('متأخرة'), stuck = count('متعثرة'), done = count('منتهية');
+
+  document.getElementById('statStrip').innerHTML = `
+    <div class="stat"><span class="stat-num">${total}</span><span class="stat-label">إجمالي المهام</span></div>
+    <div class="stat"><span class="stat-num">${ongoing}</span><span class="stat-label">جارية</span></div>
+    <div class="stat is-late"><span class="stat-num">${late}</span><span class="stat-label">متأخرة</span></div>
+    <div class="stat is-stuck"><span class="stat-num">${stuck}</span><span class="stat-label">متعثرة</span></div>
+    <div class="stat is-done"><span class="stat-num">${done}</span><span class="stat-label">منتهية</span></div>
+  `;
+
+  const banner = document.getElementById('alertBanner');
+  if(stuck + late > 0){
+    banner.classList.remove('hidden');
+    banner.innerHTML = `<strong>تنبيه:</strong> يوجد ${stuck} مهمة متعثرة و${late} مهمة متأخرة تحتاج متابعة عاجلة.`;
+  } else {
+    banner.classList.add('hidden');
+  }
+}
+
+function deptName(id){
+  const d = state.departments.find(d=>d.id===id);
+  return d ? d.name : '—';
+}
+
+function roleDisplayLabel(){
+  const u = state.currentUser;
+  if(u.role === 'department') return deptName(u.department_id);
+  return ROLE_LABELS[u.role] || u.role;
+}
+
+function renderDeptFilter(){
+  const sel = document.getElementById('filterDept');
+  const current = sel.value;
+  sel.innerHTML = `<option value="all">كل الأقسام</option>` +
+    state.departments.map(d=>`<option value="${d.id}">${d.name}</option>`).join('');
+  sel.value = current || 'all';
+}
+
+function renderTasks(){
+  const body = document.getElementById('tasksBody');
+  const role = state.currentUser.role;
+  const isFullEditor = EDITOR_ROLES.includes(role);
+  const canEditRow = (t) => isFullEditor || (role === 'department' && t.department_id === state.currentUser.department_id);
+  let list = state.tasks;
+  if(state.filterStatus !== 'all') list = list.filter(t=>t._displayStatus === state.filterStatus);
+  if(state.filterDept !== 'all') list = list.filter(t=>t.department_id === state.filterDept);
+
+  if(list.length === 0){
+    const msg = isFullEditor
+      ? 'لا توجد مهام مطابقة — اضغط "+ مهمة جديدة" لإضافة أول مهمة.'
+      : 'لا توجد مهام مسندة إليكم حاليًا.';
+    body.innerHTML = `<tr class="empty-row"><td colspan="5">${msg}</td></tr>`;
+    return;
+  }
+
+  body.innerHTML = list.map(t=>{
+    const canEdit = canEditRow(t);
+    return `
+    <tr>
+      <td>
+        <div class="task-title">${escapeHtml(t.title)}</div>
+        ${t.notes ? `<div class="task-meta">${escapeHtml(t.notes)}</div>` : ''}
+      </td>
+      <td>${escapeHtml(deptName(t.department_id))}</td>
+      <td>${escapeHtml(t.owner_name || '—')}</td>
+      <td>${t.due_date || '—'}</td>
+      <td>
+        ${canEdit
+          ? `<select class="status-select" data-id="${t.id}">
+              ${STATUSES.map(s=>`<option value="${s}" ${t.status===s?'selected':''}>${s}</option>`).join('')}
+            </select>`
+          : `<span class="badge st-${t._displayStatus}">${t._displayStatus}</span>`
+        }
+      </td>
+    </tr>
+  `;
+  }).join('');
+
+  body.querySelectorAll('.status-select').forEach(sel=>{
+    sel.onchange = async (e)=>{
+      const id = e.target.dataset.id;
+      const newStatus = e.target.value;
+      await sb.from('tasks').update({status:newStatus, last_update:new Date().toISOString()}).eq('id', id);
+      await loadAll();
+    };
+  });
+}
+
+function renderDecisions(){
+  const list = document.getElementById('decisionsList');
+  if(state.decisions.length === 0){
+    list.innerHTML = `<li class="dec-desc" style="text-align:center;padding:24px;">لا توجد قرارات مسجّلة بعد.</li>`;
+    return;
+  }
+  list.innerHTML = state.decisions.map(d=>`
+    <li>
+      <div class="dec-title">${escapeHtml(d.title)}</div>
+      <div class="dec-date">${d.decision_date || ''}</div>
+      ${d.description ? `<div class="dec-desc">${escapeHtml(d.description)}</div>` : ''}
+    </li>
+  `).join('');
+}
+
+function escapeHtml(str){
+  const div = document.createElement('div');
+  div.textContent = str ?? '';
+  return div.innerHTML;
+}
+
+/* ===== النوافذ المنبثقة ===== */
+function closeModal(){ document.getElementById('modalOverlay').classList.add('hidden'); document.getElementById('modalOverlay').innerHTML=''; }
+
+function openAddTaskModal(){
+  const overlay = document.getElementById('modalOverlay');
+  overlay.classList.remove('hidden');
+  overlay.innerHTML = `
+    <div class="modal">
+      <h3>إضافة مهمة جديدة</h3>
+      <div class="field"><label>عنوان المهمة</label><input id="mTitle" type="text"></div>
+      <div class="field"><label>القسم</label>
+        <select id="mDept"><option value="">— بدون —</option>${state.departments.map(d=>`<option value="${d.id}">${d.name}</option>`).join('')}</select>
+      </div>
+      <div class="field"><label>المسؤول</label><input id="mOwner" type="text"></div>
+      <div class="field"><label>تاريخ الاستحقاق</label><input id="mDue" type="date"></div>
+      <div class="field"><label>ملاحظات</label><textarea id="mNotes"></textarea></div>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="mCancel">إلغاء</button>
+        <button class="btn-primary" id="mSave">حفظ المهمة</button>
+      </div>
+    </div>`;
+  document.getElementById('mCancel').onclick = closeModal;
+  document.getElementById('mSave').onclick = async ()=>{
+    const title = document.getElementById('mTitle').value.trim();
+    if(!title) return;
+    await sb.from('tasks').insert({
+      title,
+      department_id: document.getElementById('mDept').value || null,
+      owner_name: document.getElementById('mOwner').value || null,
+      due_date: document.getElementById('mDue').value || null,
+      notes: document.getElementById('mNotes').value || null,
+      status: 'جارية'
+    });
+    closeModal();
+    await loadAll();
+  };
+}
+
+function openAddDecisionModal(){
+  const overlay = document.getElementById('modalOverlay');
+  overlay.classList.remove('hidden');
+  overlay.innerHTML = `
+    <div class="modal">
+      <h3>إضافة قرار جديد</h3>
+      <div class="field"><label>عنوان القرار</label><input id="dTitle" type="text"></div>
+      <div class="field"><label>تاريخ القرار</label><input id="dDate" type="date"></div>
+      <div class="field"><label>الوصف</label><textarea id="dDesc"></textarea></div>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="dCancel">إلغاء</button>
+        <button class="btn-primary" id="dSave">حفظ القرار</button>
+      </div>
+    </div>`;
+  document.getElementById('dCancel').onclick = closeModal;
+  document.getElementById('dSave').onclick = async ()=>{
+    const title = document.getElementById('dTitle').value.trim();
+    if(!title) return;
+    await sb.from('decisions').insert({
+      title,
+      decision_date: document.getElementById('dDate').value || null,
+      description: document.getElementById('dDesc').value || null
+    });
+    closeModal();
+    await loadAll();
+  };
+}
+
+init();
+</script>
+</body>
+</html>
