@@ -228,6 +228,8 @@
   .weekly-panel{margin-top:22px;}
   .weekly-form textarea{width:100%;min-height:90px;border:1px solid var(--line);border-radius:var(--radius);padding:10px;font-family:inherit;font-size:14px;color:var(--ink);background:var(--paper);resize:vertical;}
   .weekly-form{padding:16px 18px;border-bottom:1px solid var(--line);}
+  .weekly-date-range{display:flex;gap:12px;margin-bottom:10px;}
+  .weekly-date-range .field{flex:1;margin-bottom:0;}
   .weekly-form-actions{display:flex;justify-content:space-between;align-items:center;margin-top:10px;}
   .weekly-week-label{font-size:12px;color:var(--ink-soft);}
   .report-list{list-style:none;margin:0;padding:0;}
@@ -615,6 +617,7 @@ function renderWeeklyPanel(){
   const panel = document.getElementById('weeklyPanel');
   const role = state.currentUser.role;
   const thisWeek = getWeekStartISO();
+  const thisWeekEnd = (()=>{ const d = new Date(thisWeek); d.setDate(d.getDate()+4); return d.toISOString().slice(0,10); })();
 
   if(role === 'department'){
     const myReports = state.weeklyReports.filter(r => r.department_id === state.currentUser.department_id);
@@ -623,8 +626,12 @@ function renderWeeklyPanel(){
     panel.innerHTML = `
       <div class="panel-head"><h2>التقرير الأسبوعي</h2></div>
       <div class="weekly-form">
-        <p class="weekly-week-label">تقرير الأسبوع الحالي (يبدأ ${thisWeek})</p>
-        <textarea id="weeklyContent" placeholder="اكتب إنجازات الأسبوع، أي معوقات، وملاحظات..."></textarea>
+        <p class="weekly-week-label">حدّد فترة التقرير:</p>
+        <div class="weekly-date-range">
+          <div class="field"><label>من تاريخ</label><input type="date" id="weeklyStart" value="${thisWeek}"></div>
+          <div class="field"><label>إلى تاريخ</label><input type="date" id="weeklyEnd" value="${thisWeekEnd}"></div>
+        </div>
+        <textarea id="weeklyContent" placeholder="اكتب إنجازات الفترة، أي معوقات، وملاحظات..."></textarea>
         <div class="field" style="margin-top:8px;"><label>إرفاق ملف (اختياري)</label><input type="file" id="weeklyFile"></div>
         <div class="weekly-form-actions">
           <span class="weekly-week-label">${alreadySubmitted ? '✅ تم إرسال تقرير هذا الأسبوع مسبقًا، بإمكانك إرسال تحديث إضافي.' : ''}</span>
@@ -636,7 +643,7 @@ function renderWeeklyPanel(){
           ? `<li class="empty-note">لا توجد تقارير سابقة مرسلة.</li>`
           : myReports.map(r => `
             <li>
-              <div class="report-meta">الأسبوع: ${r.week_start} — أُرسل بتاريخ ${new Date(r.submitted_at).toLocaleDateString('ar-SA')}</div>
+              <div class="report-meta">الفترة: ${r.week_start} إلى ${r.week_end || r.week_start} — أُرسل بتاريخ ${new Date(r.submitted_at).toLocaleDateString('ar-SA')}</div>
               <div class="report-content">${escapeHtml(r.content || '')}</div>
               ${r.attachment_path ? `<a href="#" id="attach-${r.id}" class="attach-link">📎 ${escapeHtml(r.attachment_name || 'تحميل المرفق')}</a>` : ''}
             </li>`).join('')
@@ -647,7 +654,13 @@ function renderWeeklyPanel(){
     document.getElementById('submitWeeklyBtn').onclick = async ()=>{
       const content = document.getElementById('weeklyContent').value.trim();
       const fileInput = document.getElementById('weeklyFile');
-      if(!content) return;
+      const startDate = document.getElementById('weeklyStart').value;
+      const endDate = document.getElementById('weeklyEnd').value;
+      if(!content || !startDate || !endDate) return;
+      if(endDate < startDate){
+        alert('تاريخ النهاية لازم يكون بعد أو نفس تاريخ البداية.');
+        return;
+      }
 
       let attachmentPath = null;
       let attachmentName = null;
@@ -660,7 +673,8 @@ function renderWeeklyPanel(){
 
       await sb.from('weekly_reports').insert({
         department_id: state.currentUser.department_id,
-        week_start: thisWeek,
+        week_start: startDate,
+        week_end: endDate,
         content,
         attachment_path: attachmentPath,
         attachment_name: attachmentName
@@ -679,7 +693,7 @@ function renderWeeklyPanel(){
             <li>
               <div class="report-meta">
                 <span class="report-dept">${escapeHtml(deptName(r.department_id))}</span>
-                — الأسبوع: ${r.week_start} — أُرسل بتاريخ ${new Date(r.submitted_at).toLocaleDateString('ar-SA')}
+                — الفترة: ${r.week_start} إلى ${r.week_end || r.week_start} — أُرسل بتاريخ ${new Date(r.submitted_at).toLocaleDateString('ar-SA')}
               </div>
               <div class="report-content">${escapeHtml(r.content || '')}</div>
               ${r.attachment_path ? `<a href="#" id="attach-${r.id}" class="attach-link">📎 ${escapeHtml(r.attachment_name || 'تحميل المرفق')}</a>` : ''}
