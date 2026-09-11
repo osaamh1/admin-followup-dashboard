@@ -374,6 +374,15 @@ function renderLoginScreen(errorMsg){
     e.preventDefault();
     doLogin();
   });
+
+  ['loginEmail','loginPassword'].forEach(id=>{
+    document.getElementById(id).addEventListener('keydown', (e)=>{
+      if(e.key === 'Enter'){
+        e.preventDefault();
+        doLogin();
+      }
+    });
+  });
 }
 
 async function logout(){
