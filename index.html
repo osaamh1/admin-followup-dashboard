@@ -168,6 +168,8 @@
   .tasks-table tr.row-متأخرة td:first-child{border-right:4px solid var(--rust);}
   .tasks-table tr.row-متعثرة td:first-child{border-right:4px solid var(--redd);}
   .tasks-table tr.row-منتهية td:first-child{border-right:4px solid var(--green);}
+  .tasks-table tr.row-متأخرة{background:var(--rust-tint);}
+  .tasks-table tr.row-متعثرة{background:var(--redd-tint);}
   .empty-row td{text-align:center;color:var(--ink-soft);padding:34px;font-size:14px;}
 
   .badge{
@@ -509,7 +511,7 @@ function renderShell(){
           <table class="tasks-table">
             <thead>
               <tr>
-                <th>المهمة</th><th>القسم</th><th>المسؤول</th><th>الاستحقاق</th><th>الحالة</th>
+                <th>المهمة</th><th>القسم</th><th>الاستحقاق</th><th>الحالة</th>
               </tr>
             </thead>
             <tbody id="tasksBody"></tbody>
@@ -605,7 +607,7 @@ function renderTasks(){
     const msg = isFullEditor
       ? 'لا توجد مهام مطابقة — اضغط "+ مهمة جديدة" لإضافة أول مهمة.'
       : 'لا توجد مهام مسندة إليكم حاليًا.';
-    body.innerHTML = `<tr class="empty-row"><td colspan="5">${msg}</td></tr>`;
+    body.innerHTML = `<tr class="empty-row"><td colspan="4">${msg}</td></tr>`;
     return;
   }
 
@@ -620,7 +622,6 @@ function renderTasks(){
         ${decTitle ? `<div class="task-link">🔗 مرتبطة بقرار: ${escapeHtml(decTitle)}</div>` : ''}
       </td>
       <td>${escapeHtml(deptName(t.department_id))}</td>
-      <td>${escapeHtml(t.owner_name || 'لم يُحدد')}</td>
       <td>${t.due_date || '—'}</td>
       <td>
         ${canEdit
@@ -837,7 +838,6 @@ function openAddTaskModal(){
       <div class="field"><label>القرار المرتبط (اختياري)</label>
         <select id="mDecision"><option value="">— بدون —</option>${state.decisions.map(d=>`<option value="${d.id}">${escapeHtml(d.title)}</option>`).join('')}</select>
       </div>
-      <div class="field"><label>المسؤول</label><input id="mOwner" type="text"></div>
       <div class="field"><label>تاريخ الاستحقاق</label><input id="mDue" type="date"></div>
       <div class="field"><label>ملاحظات</label><textarea id="mNotes"></textarea></div>
       <div class="modal-actions">
@@ -853,7 +853,6 @@ function openAddTaskModal(){
       title,
       department_id: document.getElementById('mDept').value || null,
       linked_decision_id: document.getElementById('mDecision').value || null,
-      owner_name: document.getElementById('mOwner').value || null,
       due_date: document.getElementById('mDue').value || null,
       notes: document.getElementById('mNotes').value || null,
       status: 'جارية'
