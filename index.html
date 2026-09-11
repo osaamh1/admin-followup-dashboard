@@ -235,6 +235,7 @@
   .login-screen .field{text-align:right;}
   .login-btn{width:100%;margin-top:6px;padding:11px;font-size:15px;}
   .login-error{color:var(--redd);font-size:13px;margin-top:10px;}
+  .login-error a{color:var(--seal-dark);font-weight:600;}
   .login-success{color:var(--green);font-size:13px;margin-top:10px;}
   .forgot-link{display:block;margin:14px auto 0;font-size:12px;}
 
@@ -419,7 +420,7 @@ function renderLoginScreen(errorMsg){
 
   document.getElementById('forgotBtn').onclick = ()=>{
     const errEl = document.getElementById('loginErr');
-    errEl.textContent = 'نسيت كلمة المرور؟ تواصل مع مشرف النظام لإعادة تعيينها لك.';
+    errEl.innerHTML = 'نسيت كلمة المرور؟ راسل مشرف النظام على: <a href="mailto:o.aldukhail@qu.edu.sa">o.aldukhail@qu.edu.sa</a>';
     errEl.classList.remove('hidden');
   };
 }
