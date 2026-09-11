@@ -258,6 +258,18 @@
   .report-content{font-size:13px;color:var(--ink);white-space:pre-wrap;}
   .empty-note{text-align:center;color:var(--ink-soft);padding:24px;font-size:14px;}
   .attach-link{display:inline-block;margin-top:6px;font-size:12px;color:var(--seal-dark);text-decoration:underline;}
+
+  /* ===== الرسم البياني لإنجاز الأقسام ===== */
+  .dept-chart-panel{margin-top:22px;}
+  .dept-chart{padding:18px;display:flex;flex-direction:column;gap:14px;}
+  .chart-row{display:flex;align-items:center;gap:12px;}
+  .chart-label{width:190px;flex-shrink:0;font-size:13px;color:var(--ink);font-weight:600;}
+  .chart-bar-track{flex:1;background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);height:24px;overflow:hidden;}
+  .chart-bar-fill{
+    height:100%;background:linear-gradient(90deg, var(--seal-dark), var(--teal));
+    border-radius:var(--radius);transition:width .5s ease;min-width:2px;
+  }
+  .chart-value{width:26px;text-align:center;font-weight:700;color:var(--seal-dark);font-size:14px;flex-shrink:0;}
 </style>
 </head>
 <body>
@@ -428,6 +440,7 @@ async function loadAll(){
   renderDecisions();
   renderDeptFilter();
   renderWeeklyPanel();
+  renderDeptChart();
 }
 
 function flagOverdueLocally(){
@@ -500,6 +513,8 @@ function renderShell(){
           <ul class="decisions-list" id="decisionsList"></ul>
         </aside>
       </main>
+
+      <section class="panel dept-chart-panel hidden" id="deptChartPanel"></section>
 
       <section class="panel weekly-panel" id="weeklyPanel"></section>
     </div>
@@ -640,6 +655,39 @@ function sanitizeFileName(name){
     .replace(/[^a-zA-Z0-9_-]+/g, '_')
     .slice(0, 60) || 'file';
   return ext ? `${base}.${ext}` : base;
+}
+
+function renderDeptChart(){
+  const panel = document.getElementById('deptChartPanel');
+  const role = state.currentUser.role;
+
+  if(role === 'department'){
+    panel.classList.add('hidden');
+    panel.innerHTML = '';
+    return;
+  }
+  panel.classList.remove('hidden');
+
+  const counts = state.departments.map(d => ({
+    name: d.name,
+    count: state.tasks.filter(t => t.department_id === d.id && t.status === 'منتهية').length
+  }));
+  const max = Math.max(1, ...counts.map(c => c.count));
+
+  panel.innerHTML = `
+    <div class="panel-head"><h2>المهام المنجزة حسب القسم</h2></div>
+    <div class="dept-chart">
+      ${counts.length === 0
+        ? `<div class="empty-note">لا توجد أقسام مسجّلة بعد.</div>`
+        : counts.map(c => `
+          <div class="chart-row">
+            <span class="chart-label">${escapeHtml(c.name)}</span>
+            <div class="chart-bar-track"><div class="chart-bar-fill" style="width:${(c.count/max*100).toFixed(1)}%"></div></div>
+            <span class="chart-value">${c.count}</span>
+          </div>`).join('')
+      }
+    </div>
+  `;
 }
 
 function renderWeeklyPanel(){
