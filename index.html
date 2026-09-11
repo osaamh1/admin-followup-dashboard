@@ -260,7 +260,7 @@
   .attach-link{display:inline-block;margin-top:6px;font-size:12px;color:var(--seal-dark);text-decoration:underline;}
 
   /* ===== الرسم البياني لإنجاز الأقسام ===== */
-  .dept-chart-panel{margin-top:22px;}
+  .dept-chart-panel{margin-bottom:22px;}
   .dept-chart{padding:18px;display:flex;flex-direction:column;gap:14px;}
   .chart-row{display:flex;align-items:center;gap:12px;}
   .chart-label{width:190px;flex-shrink:0;font-size:13px;color:var(--ink);font-weight:600;}
@@ -482,6 +482,8 @@ function renderShell(){
 
       <section class="stat-strip" id="statStrip"></section>
 
+      <section class="panel dept-chart-panel hidden" id="deptChartPanel"></section>
+
       <main class="layout">
         <section class="panel tasks-panel">
           <div class="panel-head">
@@ -513,8 +515,6 @@ function renderShell(){
           <ul class="decisions-list" id="decisionsList"></ul>
         </aside>
       </main>
-
-      <section class="panel dept-chart-panel hidden" id="deptChartPanel"></section>
 
       <section class="panel weekly-panel" id="weeklyPanel"></section>
     </div>
