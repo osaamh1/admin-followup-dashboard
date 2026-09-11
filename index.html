@@ -160,6 +160,14 @@
   .tasks-table tr:last-child td{border-bottom:none;}
   .task-title{font-weight:600;}
   .task-meta{font-size:12px;color:var(--ink-soft);margin-top:2px;}
+  .task-link{font-size:11px;color:var(--seal-dark);margin-top:4px;}
+  .task-search{
+    border:1px solid var(--line);border-radius:var(--radius);
+    padding:6px 10px;font-size:13px;background:#fff;color:var(--ink);width:180px;
+  }
+  .tasks-table tr.row-متأخرة td:first-child{border-right:4px solid var(--rust);}
+  .tasks-table tr.row-متعثرة td:first-child{border-right:4px solid var(--redd);}
+  .tasks-table tr.row-منتهية td:first-child{border-right:4px solid var(--green);}
   .empty-row td{text-align:center;color:var(--ink-soft);padding:34px;font-size:14px;}
 
   .badge{
@@ -300,7 +308,7 @@ let inactivityTimer = null;
 let inactivityWatcherStarted = false;
 
 let sb = null;
-let state = { tasks:[], decisions:[], departments:[], weeklyReports:[], filterStatus:'all', filterDept:'all', currentUser:null };
+let state = { tasks:[], decisions:[], departments:[], weeklyReports:[], filterStatus:'all', filterDept:'all', searchText:'', currentUser:null };
 
 function isConfigured(){
   return SUPABASE_URL && SUPABASE_URL.startsWith('http') && SUPABASE_ANON_KEY && SUPABASE_ANON_KEY.length > 10;
@@ -425,7 +433,7 @@ function startInactivityWatcher(){
 
 async function loadAll(){
   const [{data:tasks}, {data:decisions}, {data:departments}, {data:weeklyReports}] = await Promise.all([
-    sb.from('tasks').select('*').order('created_at', {ascending:false}),
+    sb.from('tasks').select('*').order('due_date', {ascending:true, nullsFirst:false}),
     sb.from('decisions').select('*').eq('status','active').order('decision_date', {ascending:false}),
     sb.from('departments').select('*').order('name'),
     sb.from('weekly_reports').select('*').order('week_start', {ascending:false})
@@ -489,6 +497,7 @@ function renderShell(){
           <div class="panel-head">
             <h2>سجل المهام</h2>
             <div class="filters">
+              <input type="text" id="taskSearch" placeholder="🔍 بحث بعنوان المهمة..." class="task-search">
               <select id="filterStatus">
                 <option value="all">كل الحالات</option>
                 ${STATUSES.map(s=>`<option value="${s}">${s}</option>`).join('')}
@@ -523,6 +532,7 @@ function renderShell(){
 
   document.getElementById('todayDate').textContent = new Intl.DateTimeFormat('ar-SA',{year:'numeric',month:'long',day:'numeric'}).format(new Date());
   document.getElementById('refreshOverdueBtn').onclick = refreshOverdue;
+  document.getElementById('taskSearch').addEventListener('input', e=>{ state.searchText = e.target.value.trim(); renderTasks(); });
   document.getElementById('filterStatus').onchange = e=>{ state.filterStatus = e.target.value; renderTasks(); };
   document.getElementById('filterDept').onchange = e=>{ state.filterDept = e.target.value; renderTasks(); };
   document.getElementById('addTaskBtn').onclick = openAddTaskModal;
@@ -576,6 +586,11 @@ function renderDeptFilter(){
   sel.value = current || 'all';
 }
 
+function decisionTitle(id){
+  const d = state.decisions.find(d=>d.id===id);
+  return d ? d.title : null;
+}
+
 function renderTasks(){
   const body = document.getElementById('tasksBody');
   const role = state.currentUser.role;
@@ -584,6 +599,7 @@ function renderTasks(){
   let list = state.tasks;
   if(state.filterStatus !== 'all') list = list.filter(t=>t._displayStatus === state.filterStatus);
   if(state.filterDept !== 'all') list = list.filter(t=>t.department_id === state.filterDept);
+  if(state.searchText) list = list.filter(t=>t.title.includes(state.searchText));
 
   if(list.length === 0){
     const msg = isFullEditor
@@ -595,14 +611,16 @@ function renderTasks(){
 
   body.innerHTML = list.map(t=>{
     const canEdit = canEditRow(t);
+    const decTitle = decisionTitle(t.linked_decision_id);
     return `
-    <tr>
+    <tr class="row-${t._displayStatus}">
       <td>
         <div class="task-title">${escapeHtml(t.title)}</div>
         ${t.notes ? `<div class="task-meta">${escapeHtml(t.notes)}</div>` : ''}
+        ${decTitle ? `<div class="task-link">🔗 مرتبطة بقرار: ${escapeHtml(decTitle)}</div>` : ''}
       </td>
       <td>${escapeHtml(deptName(t.department_id))}</td>
-      <td>${escapeHtml(t.owner_name || '—')}</td>
+      <td>${escapeHtml(t.owner_name || 'لم يُحدد')}</td>
       <td>${t.due_date || '—'}</td>
       <td>
         ${canEdit
@@ -816,6 +834,9 @@ function openAddTaskModal(){
       <div class="field"><label>القسم</label>
         <select id="mDept"><option value="">— بدون —</option>${state.departments.map(d=>`<option value="${d.id}">${d.name}</option>`).join('')}</select>
       </div>
+      <div class="field"><label>القرار المرتبط (اختياري)</label>
+        <select id="mDecision"><option value="">— بدون —</option>${state.decisions.map(d=>`<option value="${d.id}">${escapeHtml(d.title)}</option>`).join('')}</select>
+      </div>
       <div class="field"><label>المسؤول</label><input id="mOwner" type="text"></div>
       <div class="field"><label>تاريخ الاستحقاق</label><input id="mDue" type="date"></div>
       <div class="field"><label>ملاحظات</label><textarea id="mNotes"></textarea></div>
@@ -831,6 +852,7 @@ function openAddTaskModal(){
     await sb.from('tasks').insert({
       title,
       department_id: document.getElementById('mDept').value || null,
+      linked_decision_id: document.getElementById('mDecision').value || null,
       owner_name: document.getElementById('mOwner').value || null,
       due_date: document.getElementById('mDue').value || null,
       notes: document.getElementById('mNotes').value || null,
