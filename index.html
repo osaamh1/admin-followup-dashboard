@@ -417,7 +417,11 @@ function renderLoginScreen(errorMsg){
     });
   });
 
-  document.getElementById('forgotBtn').onclick = renderForgotPasswordScreen;
+  document.getElementById('forgotBtn').onclick = ()=>{
+    const errEl = document.getElementById('loginErr');
+    errEl.textContent = 'نسيت كلمة المرور؟ تواصل مع مشرف النظام لإعادة تعيينها لك.';
+    errEl.classList.remove('hidden');
+  };
 }
 
 function renderForgotPasswordScreen(){
