@@ -16,7 +16,7 @@
     var params = new URLSearchParams(location.search);
     if(!params.has('_v')){
       params.set('_v', Date.now());
-      location.replace(location.pathname + '?' + params.toString());
+      location.replace(location.pathname + '?' + params.toString() + location.hash);
     }
   })();
 </script>
@@ -235,6 +235,8 @@
   .login-screen .field{text-align:right;}
   .login-btn{width:100%;margin-top:6px;padding:11px;font-size:15px;}
   .login-error{color:var(--redd);font-size:13px;margin-top:10px;}
+  .login-success{color:var(--green);font-size:13px;margin-top:10px;}
+  .forgot-link{display:block;margin:14px auto 0;font-size:12px;}
 
   /* ===== بطاقة المستخدم بالترويسة ===== */
   .user-name{
@@ -330,7 +332,15 @@ function renderSetupScreen(){
 
 async function init(){
   if(!isConfigured()){ renderSetupScreen(); return; }
-  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  if(!sb){
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    sb.auth.onAuthStateChange((event)=>{
+      if(event === 'PASSWORD_RECOVERY'){
+        renderSetNewPasswordScreen();
+      }
+    });
+  }
 
   const { data: { session } } = await sb.auth.getSession();
   if(!session){
@@ -373,6 +383,7 @@ function renderLoginScreen(errorMsg){
           <div class="field"><label>كلمة المرور</label><input id="loginPassword" name="password" type="password" autocomplete="current-password"></div>
           <button type="submit" class="btn-primary login-btn" id="loginBtn">تسجيل الدخول</button>
         </form>
+        <button class="btn-text forgot-link" id="forgotBtn">نسيت كلمة المرور؟</button>
         <p class="login-error hidden" id="loginErr"></p>
       </div>
     </div>`;
@@ -405,6 +416,85 @@ function renderLoginScreen(errorMsg){
       }
     });
   });
+
+  document.getElementById('forgotBtn').onclick = renderForgotPasswordScreen;
+}
+
+function renderForgotPasswordScreen(){
+  document.getElementById('app').innerHTML = `
+    <div class="page">
+      <div class="setup-screen login-screen">
+        <img src="${LOGO_DATA_URI}" class="login-logo" alt="شعار جامعة القصيم - كلية الشريعة">
+        <h2>استعادة كلمة المرور</h2>
+        <p class="login-unit-name">وحدة المتابعة الإدارية</p>
+        <p style="font-size:13px;color:var(--ink-soft);margin-bottom:14px;">حط إيميلك المسجّل بالنظام، وبنرسل لك رابط لتعيين كلمة مرور جديدة.</p>
+        <div class="field"><label>البريد الإلكتروني</label><input id="forgotEmail" type="email"></div>
+        <button class="btn-primary login-btn" id="forgotSendBtn">إرسال رابط الاستعادة</button>
+        <button class="btn-text forgot-link" id="backToLoginBtn">رجوع لتسجيل الدخول</button>
+        <p class="login-error hidden" id="forgotErr"></p>
+        <p class="login-success hidden" id="forgotOk"></p>
+      </div>
+    </div>`;
+
+  document.getElementById('backToLoginBtn').onclick = ()=>renderLoginScreen();
+
+  document.getElementById('forgotSendBtn').onclick = async ()=>{
+    const email = document.getElementById('forgotEmail').value.trim();
+    const errEl = document.getElementById('forgotErr');
+    const okEl = document.getElementById('forgotOk');
+    errEl.classList.add('hidden');
+    okEl.classList.add('hidden');
+    if(!email) return;
+
+    const redirectUrl = location.origin + location.pathname;
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: redirectUrl });
+    if(error){
+      errEl.textContent = 'حدث خطأ، تأكد من صحة الإيميل وحاول مرة أخرى.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+    okEl.textContent = 'تم إرسال رابط الاستعادة إلى إيميلك (تحقق من صندوق الوارد ومجلد الرسائل غير المرغوبة).';
+    okEl.classList.remove('hidden');
+  };
+}
+
+function renderSetNewPasswordScreen(){
+  document.getElementById('app').innerHTML = `
+    <div class="page">
+      <div class="setup-screen login-screen">
+        <img src="${LOGO_DATA_URI}" class="login-logo" alt="شعار جامعة القصيم - كلية الشريعة">
+        <h2>تعيين كلمة مرور جديدة</h2>
+        <p class="login-unit-name">وحدة المتابعة الإدارية</p>
+        <div class="field"><label>كلمة المرور الجديدة</label><input id="newPass1" type="password"></div>
+        <div class="field"><label>تأكيد كلمة المرور</label><input id="newPass2" type="password"></div>
+        <button class="btn-primary login-btn" id="saveNewPassBtn">حفظ كلمة المرور</button>
+        <p class="login-error hidden" id="newPassErr"></p>
+      </div>
+    </div>`;
+
+  document.getElementById('saveNewPassBtn').onclick = async ()=>{
+    const p1 = document.getElementById('newPass1').value;
+    const p2 = document.getElementById('newPass2').value;
+    const errEl = document.getElementById('newPassErr');
+    errEl.classList.add('hidden');
+    if(!p1 || p1.length < 6){
+      errEl.textContent = 'كلمة المرور لازم تكون 6 أحرف على الأقل.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+    if(p1 !== p2){
+      errEl.textContent = 'كلمتا المرور غير متطابقتين.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+    const { error } = await sb.auth.updateUser({ password: p1 });
+    if(error){
+      errEl.textContent = 'حدث خطأ أثناء الحفظ، حاول مرة أخرى أو اطلب رابط استعادة جديد.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+    await init();
+  };
 }
 
 async function logout(){
@@ -482,6 +572,7 @@ function renderShell(){
         <div class="mast-left">
           <div class="mast-controls">
             <button class="btn-ghost ${EDITOR_ROLES.includes(state.currentUser.role) ? '' : 'hidden'}" id="refreshOverdueBtn">تحديث الحالات المتأخرة</button>
+            <button class="btn-ghost" id="changePassBtn">🔒 تغيير كلمة المرور</button>
             <button class="logout-btn" id="logoutBtn">🚪 خروج</button>
           </div>
           <span class="mast-date" id="todayDate"></span>
@@ -540,6 +631,48 @@ function renderShell(){
   document.getElementById('addTaskBtn').onclick = openAddTaskModal;
   document.getElementById('addDecisionBtn').onclick = openAddDecisionModal;
   document.getElementById('logoutBtn').onclick = logout;
+  document.getElementById('changePassBtn').onclick = openChangePasswordModal;
+}
+
+function openChangePasswordModal(){
+  const overlay = document.getElementById('modalOverlay');
+  overlay.classList.remove('hidden');
+  overlay.innerHTML = `
+    <div class="modal">
+      <h3>تغيير كلمة المرور</h3>
+      <div class="field"><label>كلمة المرور الجديدة</label><input id="cpPass1" type="password"></div>
+      <div class="field"><label>تأكيد كلمة المرور</label><input id="cpPass2" type="password"></div>
+      <p class="login-error hidden" id="cpErr"></p>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="cpCancel">إلغاء</button>
+        <button class="btn-primary" id="cpSave">حفظ</button>
+      </div>
+    </div>`;
+  document.getElementById('cpCancel').onclick = closeModal;
+  document.getElementById('cpSave').onclick = async ()=>{
+    const p1 = document.getElementById('cpPass1').value;
+    const p2 = document.getElementById('cpPass2').value;
+    const errEl = document.getElementById('cpErr');
+    errEl.classList.add('hidden');
+    if(!p1 || p1.length < 6){
+      errEl.textContent = 'كلمة المرور لازم تكون 6 أحرف على الأقل.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+    if(p1 !== p2){
+      errEl.textContent = 'كلمتا المرور غير متطابقتين.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+    const { error } = await sb.auth.updateUser({ password: p1 });
+    if(error){
+      errEl.textContent = 'حدث خطأ أثناء الحفظ، حاول مرة أخرى.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+    closeModal();
+    alert('تم تغيير كلمة المرور بنجاح.');
+  };
 }
 
 async function refreshOverdue(){
