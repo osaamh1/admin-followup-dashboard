@@ -319,7 +319,13 @@
   .badge-pending{background:var(--amber-tint);color:var(--amber);}
   .badge-approved{background:var(--green-tint);color:var(--green);}
   .badge-waiting{background:var(--teal-tint);color:var(--seal-dark);}
-  .request-item{border-right:3px solid var(--teal);}
+  .request-item{
+    border-right:4px solid var(--teal);background:var(--teal-tint);
+    padding:16px 18px;border-radius:0 var(--radius) var(--radius) 0;
+  }
+  .request-period{font-size:15px;font-weight:700;color:var(--seal-dark);margin-bottom:6px;}
+  .request-period span{font-weight:400;color:var(--ink);}
+  .request-note{font-size:13px;color:var(--ink-soft);background:#fff;padding:8px 12px;border-radius:4px;margin-bottom:4px;}
   .pending-requests-panel{margin-top:22px;padding:0;}
   .pending-requests-panel summary{
     padding:14px 18px;font-family:'Noto Kufi Arabic',sans-serif;font-size:17px;
@@ -1080,10 +1086,10 @@ function renderWeeklyPanel(){
       <ul class="report-list">
         ${myRequests.map(r => `
           <li class="request-item">
-            <div class="report-meta">الفترة المطلوبة: ${r.week_start} إلى ${r.week_end || r.week_start}</div>
-            ${r.content ? `<div class="report-content">ملاحظة: ${escapeHtml(r.content)}</div>` : ''}
-            <div class="field" style="margin-top:8px;"><label>محتوى التقرير</label><textarea class="respond-content" data-id="${r.id}" placeholder="اكتب إنجازات الفترة، أي معوقات، وملاحظات..."></textarea></div>
-            <div class="field"><label>إرفاق ملف (اختياري)</label><input type="file" class="respond-file" data-id="${r.id}"></div>
+            <div class="request-period">📅 الفترة المطلوبة: <span>${r.week_start} إلى ${r.week_end || r.week_start}</span></div>
+            ${r.content ? `<div class="request-note">💬 ملاحظة من الطالب: ${escapeHtml(r.content)}</div>` : ''}
+            <div class="field" style="margin-top:12px;"><label><strong>✍️ محتوى التقرير</strong></label><textarea class="respond-content" data-id="${r.id}" placeholder="اكتب إنجازات الفترة، أي معوقات، وملاحظات..."></textarea></div>
+            <div class="field"><label>📎 إرفاق ملف (اختياري)</label><input type="file" class="respond-file" data-id="${r.id}"></div>
             <button class="btn-primary respond-btn" data-id="${r.id}">إرسال الرد</button>
           </li>`).join('')}
       </ul>
