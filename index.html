@@ -549,10 +549,18 @@ async function loadAll(){
 }
 
 function flagOverdueLocally(){
-  const today = new Date().toISOString().slice(0,10);
+  const today = new Date();
   state.tasks.forEach(t=>{
-    if(t.status === 'جارية' && t.due_date && t.due_date < today){
-      t._displayStatus = 'متأخرة';
+    if((t.status === 'جارية' || t.status === 'متأخرة') && t.due_date){
+      const due = new Date(t.due_date);
+      const daysPast = Math.floor((today - due) / (1000*60*60*24));
+      if(daysPast > 3){
+        t._displayStatus = 'متعثرة';
+      } else if(daysPast > 0){
+        t._displayStatus = 'متأخرة';
+      } else {
+        t._displayStatus = t.status;
+      }
     } else {
       t._displayStatus = t.status;
     }
@@ -760,7 +768,7 @@ function renderTasks(){
         ${decTitle ? `<div class="task-link">🔗 مرتبطة بقرار: ${escapeHtml(decTitle)}</div>` : ''}
       </td>
       <td>${escapeHtml(deptName(t.department_id))}</td>
-      <td>${t.due_date || '—'}</td>
+      <td>${t.start_date ? `${t.start_date} → ` : ''}${t.due_date || '—'}</td>
       <td>
         ${canEdit
           ? `<select class="status-select" data-id="${t.id}">
@@ -976,7 +984,8 @@ function openAddTaskModal(){
       <div class="field"><label>القرار المرتبط (اختياري)</label>
         <select id="mDecision"><option value="">— بدون —</option>${state.decisions.map(d=>`<option value="${d.id}">${escapeHtml(d.title)}</option>`).join('')}</select>
       </div>
-      <div class="field"><label>تاريخ الاستحقاق</label><input id="mDue" type="date"></div>
+      <div class="field"><label>تاريخ البداية</label><input id="mStart" type="date"></div>
+      <div class="field"><label>تاريخ النهاية</label><input id="mDue" type="date"></div>
       <div class="field"><label>ملاحظات</label><textarea id="mNotes"></textarea></div>
       <div class="modal-actions">
         <button class="btn-ghost" id="mCancel">إلغاء</button>
@@ -986,12 +995,19 @@ function openAddTaskModal(){
   document.getElementById('mCancel').onclick = closeModal;
   document.getElementById('mSave').onclick = async ()=>{
     const title = document.getElementById('mTitle').value.trim();
+    const startDate = document.getElementById('mStart').value || null;
+    const dueDate = document.getElementById('mDue').value || null;
     if(!title) return;
+    if(startDate && dueDate && dueDate < startDate){
+      alert('تاريخ النهاية لازم يكون بعد أو نفس تاريخ البداية.');
+      return;
+    }
     await sb.from('tasks').insert({
       title,
       department_id: document.getElementById('mDept').value || null,
       linked_decision_id: document.getElementById('mDecision').value || null,
-      due_date: document.getElementById('mDue').value || null,
+      start_date: startDate,
+      due_date: dueDate,
       notes: document.getElementById('mNotes').value || null,
       status: 'جارية'
     });
