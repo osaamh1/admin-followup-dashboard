@@ -103,6 +103,10 @@
     padding:9px 16px;border-radius:var(--radius);font-size:14px;font-weight:600;
   }
   .btn-primary:hover{background:var(--seal-dark);}
+  .btn-add-task{
+    font-size:15px;padding:11px 20px;font-weight:700;
+    box-shadow:0 2px 6px rgba(27,59,111,0.25);
+  }
   .btn-text{background:none;border:none;color:var(--seal-dark);font-size:13px;text-decoration:underline;padding:0;}
 
   /* ===== تنبيه ===== */
@@ -166,7 +170,8 @@
     background:none;border:1px solid var(--line);border-radius:2px;padding:2px 8px;
   }
   .edit-task-btn:hover{color:var(--seal-dark);border-color:var(--seal-dark);}
-  .date-range{white-space:nowrap;}
+  .date-range{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;}
+  .date-arrow{color:var(--ink-soft);}
   .task-search{
     border:1px solid var(--line);border-radius:var(--radius);
     padding:6px 10px;font-size:13px;background:#fff;color:var(--ink);width:180px;
@@ -220,6 +225,12 @@
   }
   .field textarea{resize:vertical;min-height:70px;}
   .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px;}
+  .modal-actions:has(.btn-danger){justify-content:space-between;}
+  .btn-danger{
+    background:var(--redd-tint);color:var(--redd);border:1px solid var(--redd);
+    padding:9px 14px;border-radius:var(--radius);font-size:13px;font-weight:600;
+  }
+  .btn-danger:hover{background:var(--redd);color:#fff;}
 
   /* ===== شاشة الإعداد ===== */
   .setup-screen{
@@ -615,7 +626,7 @@ function renderShell(){
                 ${STATUSES.map(s=>`<option value="${s}">${s}</option>`).join('')}
               </select>
               <select id="filterDept"><option value="all">كل الأقسام</option></select>
-              <button class="btn-primary ${EDITOR_ROLES.includes(state.currentUser.role) ? '' : 'hidden'}" id="addTaskBtn">+ مهمة جديدة</button>
+              <button class="btn-primary btn-add-task ${EDITOR_ROLES.includes(state.currentUser.role) ? '' : 'hidden'}" id="addTaskBtn">+ مهمة جديدة</button>
             </div>
           </div>
           <table class="tasks-table">
@@ -775,7 +786,7 @@ function renderTasks(){
         ${isFullEditor ? `<button class="edit-task-btn" data-id="${t.id}">✏️ تعديل</button>` : ''}
       </td>
       <td>${escapeHtml(deptName(t.department_id))}</td>
-      <td><span dir="ltr" class="date-range">${t.start_date ? `${t.start_date} → ` : ''}${t.due_date || '—'}</span></td>
+      <td><span class="date-range">${t.start_date ? `<span>${t.start_date}</span><span class="date-arrow">→</span>` : ''}<span>${t.due_date || '—'}</span></span></td>
       <td>
         ${canEdit
           ? `<select class="status-select" data-id="${t.id}">
@@ -1003,11 +1014,18 @@ function openEditTaskModal(task){
       <div class="field"><label>ملاحظات</label><textarea id="eNotes">${escapeHtml(task.notes || '')}</textarea></div>
       <p class="login-error hidden" id="eErr"></p>
       <div class="modal-actions">
+        <button class="btn-danger" id="eDelete">🗑 حذف المهمة</button>
         <button class="btn-ghost" id="eCancel">إلغاء</button>
         <button class="btn-primary" id="eSave">حفظ التعديلات</button>
       </div>
     </div>`;
   document.getElementById('eCancel').onclick = closeModal;
+  document.getElementById('eDelete').onclick = async ()=>{
+    if(!confirm(`متأكد إنك تبي تحذف مهمة "${task.title}"؟ هذا الإجراء لا يمكن التراجع عنه.`)) return;
+    await sb.from('tasks').delete().eq('id', task.id);
+    closeModal();
+    await loadAll();
+  };
   document.getElementById('eSave').onclick = async ()=>{
     const title = document.getElementById('eTitle').value.trim();
     const startDate = document.getElementById('eStart').value || null;
