@@ -1079,17 +1079,16 @@ function renderWeeklyPanel(){
         </div>
       </div>
       <ul class="report-list">
-        ${myReports.length === 0
-          ? `<li class="empty-note">لا توجد تقارير سابقة مرسلة.</li>`
-          : myReports.map(r => `
+        ${(()=>{ const pendingMine = myReports.filter(r=>r.status !== 'معتمد'); return pendingMine.length === 0
+          ? `<li class="empty-note">لا توجد تقارير قيد المراجعة حاليًا.</li>`
+          : pendingMine.map(r => `
             <li>
               <div class="report-meta">الفترة: ${r.week_start} إلى ${r.week_end || r.week_start} — أُرسل بتاريخ ${new Date(r.submitted_at).toLocaleDateString('ar-SA')}
-                <span class="badge-inline ${r.status === 'معتمد' ? 'badge-approved' : 'badge-pending'}">${r.status === 'معتمد' ? '✅ معتمد' : '📋 قيد المراجعة'}</span>
+                <span class="badge-inline badge-pending">📋 قيد المراجعة</span>
               </div>
               <div class="report-content">${escapeHtml(r.content || '')}</div>
               ${r.attachment_path ? `<a href="#" id="attach-${r.id}" class="attach-link">📎 ${escapeHtml(r.attachment_name || 'تحميل المرفق')}</a>` : ''}
-            </li>`).join('')
-        }
+            </li>`).join(''); })()}
       </ul>
     `;
 
@@ -1162,8 +1161,6 @@ function renderWeeklyPanel(){
 
 function renderApprovedReports(){
   const panel = document.getElementById('approvedReportsPanel');
-  const role = state.currentUser.role;
-  if(role === 'department'){ panel.classList.add('hidden'); return; }
   panel.classList.remove('hidden');
 
   const approved = state.weeklyReports.filter(r => r.status === 'معتمد');
@@ -1357,6 +1354,9 @@ function openGenerateReportModal(){
   overlay.innerHTML = `
     <div class="modal">
       <h3>إصدار تقرير الفترة</h3>
+      <div class="field"><label>القسم</label>
+        <select id="repDept"><option value="">كل الأقسام</option>${state.departments.map(d=>`<option value="${d.id}">${d.name}</option>`).join('')}</select>
+      </div>
       <div class="field"><label>من تاريخ</label><input id="repStart" type="date" value="${monthAgo}"></div>
       <div class="field"><label>إلى تاريخ</label><input id="repEnd" type="date" value="${today}"></div>
       <div class="modal-actions">
@@ -1368,20 +1368,26 @@ function openGenerateReportModal(){
   document.getElementById('repGenerate').onclick = ()=>{
     const start = document.getElementById('repStart').value;
     const end = document.getElementById('repEnd').value;
+    const deptId = document.getElementById('repDept').value || null;
     if(!start || !end || end < start){
       alert('تأكد من اختيار تاريخ بداية ونهاية صحيحين.');
       return;
     }
-    generatePeriodReport(start, end);
+    generatePeriodReport(start, end, deptId);
     closeModal();
   };
 }
 
-function generatePeriodReport(start, end){
+function generatePeriodReport(start, end, deptId){
   const inRange = (dateStr) => dateStr && dateStr.slice(0,10) >= start && dateStr.slice(0,10) <= end;
 
-  const completedTasks = state.tasks.filter(t => t.status === 'منتهية' && inRange(t.last_update));
-  const approvedReports = state.weeklyReports.filter(r => r.status === 'معتمد' && inRange(r.approved_at));
+  let completedTasks = state.tasks.filter(t => t.status === 'منتهية' && inRange(t.last_update));
+  let approvedReports = state.weeklyReports.filter(r => r.status === 'معتمد' && inRange(r.approved_at));
+  if(deptId){
+    completedTasks = completedTasks.filter(t => t.department_id === deptId);
+    approvedReports = approvedReports.filter(r => r.department_id === deptId);
+  }
+  const scopeLabel = deptId ? deptName(deptId) : 'كل الأقسام';
 
   const tasksByDept = {};
   completedTasks.forEach(t=>{
@@ -1445,7 +1451,7 @@ function generatePeriodReport(start, end){
   </div>
 
   <div style="margin-bottom:20px;">
-    <span class="period-badge">الفترة: ${start} ← ${end}</span>
+    <span class="period-badge">الفترة: ${start} ← ${end} — النطاق: ${scopeLabel}</span>
   </div>
 
   <div class="summary-strip">
