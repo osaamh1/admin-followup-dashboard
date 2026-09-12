@@ -318,6 +318,13 @@
   .badge-inline{display:inline-block;margin-right:6px;font-size:11px;padding:2px 8px;border-radius:2px;font-weight:600;}
   .badge-pending{background:var(--amber-tint);color:var(--amber);}
   .badge-approved{background:var(--green-tint);color:var(--green);}
+  .badge-waiting{background:var(--teal-tint);color:var(--seal-dark);}
+  .request-item{border-right:3px solid var(--teal);}
+  .pending-requests-panel{margin-top:22px;padding:0;}
+  .pending-requests-panel summary{
+    padding:14px 18px;font-family:'Noto Kufi Arabic',sans-serif;font-size:17px;
+    color:var(--seal-dark);cursor:pointer;
+  }
   .approve-report-btn{
     display:inline-block;margin-top:6px;font-size:11px;color:#fff;background:var(--green);
     border:none;padding:3px 10px;border-radius:2px;font-weight:600;
@@ -702,6 +709,8 @@ function renderShell(){
 
       <section class="panel weekly-panel" id="weeklyPanel"></section>
 
+      <details class="panel pending-requests-panel hidden" id="pendingRequestsPanel"></details>
+
       <details class="panel approved-reports-panel hidden" id="approvedReportsPanel"></details>
 
       <details class="panel completed-panel" id="completedPanel"></details>
@@ -1061,9 +1070,25 @@ function renderWeeklyPanel(){
 
   if(role === 'department'){
     const myReports = state.weeklyReports.filter(r => r.department_id === state.currentUser.department_id);
+    const myRequests = myReports.filter(r => r.status === 'مطلوب');
+    const myPending = myReports.filter(r => r.status === 'قيد المراجعة');
     const alreadySubmitted = myReports.some(r => r.week_start === thisWeek);
 
     panel.innerHTML = `
+      ${myRequests.length > 0 ? `
+      <div class="panel-head"><h2>📥 طلبات تقارير موجّهة لكم</h2></div>
+      <ul class="report-list">
+        ${myRequests.map(r => `
+          <li class="request-item">
+            <div class="report-meta">الفترة المطلوبة: ${r.week_start} إلى ${r.week_end || r.week_start}</div>
+            ${r.content ? `<div class="report-content">ملاحظة: ${escapeHtml(r.content)}</div>` : ''}
+            <div class="field" style="margin-top:8px;"><label>محتوى التقرير</label><textarea class="respond-content" data-id="${r.id}" placeholder="اكتب إنجازات الفترة، أي معوقات، وملاحظات..."></textarea></div>
+            <div class="field"><label>إرفاق ملف (اختياري)</label><input type="file" class="respond-file" data-id="${r.id}"></div>
+            <button class="btn-primary respond-btn" data-id="${r.id}">إرسال الرد</button>
+          </li>`).join('')}
+      </ul>
+      ` : ''}
+
       <div class="panel-head"><h2>التقرير الأسبوعي</h2></div>
       <div class="weekly-form">
         <p class="weekly-week-label">حدّد فترة التقرير:</p>
@@ -1079,18 +1104,46 @@ function renderWeeklyPanel(){
         </div>
       </div>
       <ul class="report-list">
-        ${(()=>{ const pendingMine = myReports.filter(r=>r.status !== 'معتمد'); return pendingMine.length === 0
+        ${myPending.length === 0
           ? `<li class="empty-note">لا توجد تقارير قيد المراجعة حاليًا.</li>`
-          : pendingMine.map(r => `
+          : myPending.map(r => `
             <li>
               <div class="report-meta">الفترة: ${r.week_start} إلى ${r.week_end || r.week_start} — أُرسل بتاريخ ${new Date(r.submitted_at).toLocaleDateString('ar-SA')}
                 <span class="badge-inline badge-pending">📋 قيد المراجعة</span>
               </div>
               <div class="report-content">${escapeHtml(r.content || '')}</div>
               ${r.attachment_path ? `<a href="#" id="attach-${r.id}" class="attach-link">📎 ${escapeHtml(r.attachment_name || 'تحميل المرفق')}</a>` : ''}
-            </li>`).join(''); })()}
+            </li>`).join('')
+        }
       </ul>
     `;
+
+    panel.querySelectorAll('.respond-btn').forEach(btn=>{
+      btn.onclick = async ()=>{
+        const id = btn.dataset.id;
+        const content = panel.querySelector(`.respond-content[data-id="${id}"]`).value.trim();
+        const fileInput = panel.querySelector(`.respond-file[data-id="${id}"]`);
+        if(!content){ alert('لازم تكتب محتوى التقرير قبل الإرسال.'); return; }
+
+        let attachmentPath = null;
+        let attachmentName = null;
+        if(fileInput.files.length > 0){
+          const file = fileInput.files[0];
+          const path = `${state.currentUser.department_id}/${Date.now()}_${sanitizeFileName(file.name)}`;
+          const { error: uploadError } = await sb.storage.from('weekly-attachments').upload(path, file);
+          if(!uploadError){ attachmentPath = path; attachmentName = file.name; }
+        }
+
+        await sb.from('weekly_reports').update({
+          content,
+          attachment_path: attachmentPath,
+          attachment_name: attachmentName,
+          status: 'قيد المراجعة',
+          submitted_at: new Date().toISOString()
+        }).eq('id', id);
+        await loadAll();
+      };
+    });
 
     document.getElementById('submitWeeklyBtn').onclick = async ()=>{
       const content = document.getElementById('weeklyContent').value.trim();
@@ -1124,12 +1177,12 @@ function renderWeeklyPanel(){
     };
 
   } else {
-    // العميد / الأمين / الأدمن / الأعضاء: عرض التقارير المعلّقة فقط، والمعتمدة تنتقل لقسم منفصل
-    const pending = state.weeklyReports.filter(r => r.status !== 'معتمد');
+    // العميد / الأمين / الأدمن / الأعضاء: عرض التقارير قيد المراجعة الفعلية فقط
+    const pending = state.weeklyReports.filter(r => r.status === 'قيد المراجعة');
     panel.innerHTML = `
       <div class="panel-head">
         <h2>التقارير الأسبوعية للأقسام (بانتظار الاعتماد)</h2>
-        <button class="btn-primary" id="addWeeklyReportBtn">+ تقرير أسبوعي جديد</button>
+        <button class="btn-primary" id="addWeeklyReportBtn">+ طلب تقرير أسبوعي</button>
       </div>
       <ul class="report-list">
         ${pending.length === 0
@@ -1161,8 +1214,36 @@ function renderWeeklyPanel(){
   }
 
   attachDownloadLinks();
+  renderPendingRequests();
   renderApprovedReports();
 }
+
+function renderPendingRequests(){
+  const panel = document.getElementById('pendingRequestsPanel');
+  const role = state.currentUser.role;
+  if(role === 'department'){ panel.classList.add('hidden'); return; }
+  panel.classList.remove('hidden');
+
+  const requests = state.weeklyReports.filter(r => r.status === 'مطلوب');
+  panel.innerHTML = `
+    <summary>⏳ طلبات تحت الإجراء (${requests.length})</summary>
+    <ul class="report-list">
+      ${requests.length === 0
+        ? `<li class="empty-note">لا توجد طلبات تحت الإجراء حاليًا.</li>`
+        : requests.map(r => `
+          <li>
+            <div class="report-meta">
+              <span class="report-dept">${escapeHtml(deptName(r.department_id))}</span>
+              — الفترة المطلوبة: ${r.week_start} إلى ${r.week_end || r.week_start}
+            </div>
+            ${r.content ? `<div class="report-content">ملاحظة: ${escapeHtml(r.content)}</div>` : ''}
+            <span class="badge-inline badge-waiting">⏳ بانتظار رد القسم</span>
+          </li>`).join('')
+      }
+    </ul>
+  `;
+}
+
 
 function renderApprovedReports(){
   const panel = document.getElementById('approvedReportsPanel');
@@ -1565,18 +1646,17 @@ function openAddWeeklyReportModal(){
   overlay.classList.remove('hidden');
   overlay.innerHTML = `
     <div class="modal">
-      <h3>تقرير أسبوعي جديد</h3>
+      <h3>طلب تقرير أسبوعي من قسم</h3>
       <div class="field"><label>القسم</label>
         <select id="wDept">${state.departments.map(d=>`<option value="${d.id}">${d.name}</option>`).join('')}</select>
       </div>
       <div class="field"><label>من تاريخ</label><input id="wStart" type="date" value="${thisWeek}"></div>
       <div class="field"><label>إلى تاريخ</label><input id="wEnd" type="date" value="${thisWeekEnd}"></div>
-      <div class="field"><label>المحتوى</label><textarea id="wContent"></textarea></div>
-      <div class="field"><label>إرفاق ملف (اختياري)</label><input type="file" id="wFile"></div>
+      <div class="field"><label>ملاحظة للقسم (اختياري)</label><textarea id="wContent" placeholder="مثال: نحتاج تقرير عن نشاط الأسبوع الفلاني تحديدًا..."></textarea></div>
       <p class="login-error hidden" id="wErr"></p>
       <div class="modal-actions">
         <button class="btn-ghost" id="wCancel">إلغاء</button>
-        <button class="btn-primary" id="wSave">حفظ (يُعتمد تلقائيًا)</button>
+        <button class="btn-primary" id="wSave">إرسال الطلب</button>
       </div>
     </div>`;
   document.getElementById('wCancel').onclick = closeModal;
@@ -1585,10 +1665,9 @@ function openAddWeeklyReportModal(){
     const startDate = document.getElementById('wStart').value;
     const endDate = document.getElementById('wEnd').value;
     const content = document.getElementById('wContent').value.trim();
-    const fileInput = document.getElementById('wFile');
     const errEl = document.getElementById('wErr');
     errEl.classList.add('hidden');
-    if(!deptId || !content || !startDate || !endDate){
+    if(!deptId || !startDate || !endDate){
       errEl.textContent = 'عبّي كل الحقول المطلوبة.';
       errEl.classList.remove('hidden');
       return;
@@ -1599,24 +1678,12 @@ function openAddWeeklyReportModal(){
       return;
     }
 
-    let attachmentPath = null;
-    let attachmentName = null;
-    if(fileInput.files.length > 0){
-      const file = fileInput.files[0];
-      const path = `${deptId}/${Date.now()}_${sanitizeFileName(file.name)}`;
-      const { error: uploadError } = await sb.storage.from('weekly-attachments').upload(path, file);
-      if(!uploadError){ attachmentPath = path; attachmentName = file.name; }
-    }
-
     await sb.from('weekly_reports').insert({
       department_id: deptId,
       week_start: startDate,
       week_end: endDate,
-      content,
-      attachment_path: attachmentPath,
-      attachment_name: attachmentName,
-      status: 'معتمد',
-      approved_at: new Date().toISOString()
+      content: content || null,
+      status: 'مطلوب'
     });
     closeModal();
     await loadAll();
