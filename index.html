@@ -69,7 +69,7 @@
 
   /* ===== الترويسة ===== */
   .masthead{
-    display:flex;justify-content:space-between;align-items:center;
+    display:flex;justify-content:space-between;align-items:flex-start;
     border-bottom:3px solid var(--teal);
     padding-bottom:18px;margin-bottom:22px;
     gap:16px;flex-wrap:wrap;
@@ -88,8 +88,8 @@
   .login-logo{height:72px;width:auto;margin:0 auto 32px;display:block;}
   .masthead h1{font-size:26px;font-weight:900;color:var(--seal-dark);}
   .mast-sub{margin:4px 0 0;color:var(--ink-soft);font-size:14px;}
-  .mast-left{display:flex;flex-direction:column;align-items:flex-end;gap:8px;}
-  .mast-center{display:flex;align-items:center;gap:10px;}
+  .mast-left{display:flex;flex-direction:column;align-items:flex-end;gap:8px;margin-top:18px;}
+  .mast-center{display:flex;align-items:center;gap:10px;margin-top:16px;}
   .mast-controls{display:flex;align-items:center;gap:10px;}
   .mast-date{font-size:13px;color:var(--ink-soft);}
 
@@ -1411,36 +1411,71 @@ function generatePeriodReport(start, end, deptId){
     --amber:#9C6B1E; --amber-tint:#F1E7D3; --green:#2D6A4C; --green-tint:#DEEAE2;
   }
   *{box-sizing:border-box;}
-  body{font-family:'IBM Plex Sans Arabic',sans-serif;color:var(--ink);margin:0;padding:32px;background:#fff;}
-  h1,h2,h3{font-family:'Noto Kufi Arabic',sans-serif;margin:0;}
-  .report-header{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid var(--teal);padding-bottom:16px;margin-bottom:20px;}
-  .report-header img{height:56px;}
-  .report-header h1{font-size:22px;color:var(--seal-dark);}
-  .report-sub{color:var(--ink-soft);font-size:13px;margin-top:4px;}
-  .period-badge{background:var(--teal-tint);color:var(--seal-dark);padding:6px 16px;border-radius:4px;font-weight:700;font-size:13px;}
-  .summary-strip{display:flex;gap:14px;margin-bottom:24px;}
-  .summary-box{flex:1;border:1px solid var(--line);border-radius:4px;padding:16px;text-align:center;}
-  .summary-box .num{font-family:'Noto Kufi Arabic',sans-serif;font-size:30px;font-weight:700;color:var(--seal-dark);}
-  .summary-box .lbl{font-size:12px;color:var(--ink-soft);margin-top:4px;}
-  section{margin-bottom:28px;}
-  section h2{font-size:16px;color:var(--seal-dark);border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:12px;}
-  table{width:100%;border-collapse:collapse;font-size:12.5px;}
-  th{background:var(--paper);text-align:right;padding:8px 10px;font-size:11px;color:var(--ink-soft);border-bottom:1px solid var(--line);}
-  td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
-  .dept-breakdown{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;}
-  .dept-chip{background:var(--green-tint);color:var(--green);padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;}
-  .empty-note{color:var(--ink-soft);font-size:13px;text-align:center;padding:16px;}
-  .report-footer{margin-top:32px;padding-top:12px;border-top:1px solid var(--line);font-size:11px;color:var(--ink-soft);display:flex;justify-content:space-between;}
-  .print-bar{text-align:left;margin-bottom:16px;}
-  .print-bar button{
-    background:var(--seal-dark);color:#fff;border:none;padding:9px 18px;border-radius:4px;
-    font-family:'IBM Plex Sans Arabic',sans-serif;font-size:13px;font-weight:600;cursor:pointer;
+  html{background:linear-gradient(180deg, var(--teal-tint) 0%, var(--paper) 320px);}
+  body{
+    font-family:'IBM Plex Sans Arabic',sans-serif;color:var(--ink);margin:0;
+    padding:40px 24px;font-size:15px;line-height:1.7;
   }
-  @media print{ .print-bar{display:none;} body{padding:0;} }
+  .sheet{
+    max-width:900px;margin:0 auto;background:#fff;border-radius:10px;
+    padding:36px 40px;box-shadow:0 8px 28px rgba(18,41,79,0.12);
+    border-top:6px solid var(--teal);
+  }
+  h1,h2,h3{font-family:'Noto Kufi Arabic',sans-serif;margin:0;}
+  .report-header{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid var(--teal);padding-bottom:18px;margin-bottom:24px;}
+  .report-header img{height:64px;}
+  .report-header h1{font-size:26px;color:var(--seal-dark);}
+  .report-sub{color:var(--ink-soft);font-size:14px;margin-top:6px;}
+  .period-badge{
+    display:inline-block;background:var(--seal-dark);color:#fff;
+    padding:9px 20px;border-radius:6px;font-weight:700;font-size:14px;
+  }
+  .summary-strip{display:flex;gap:16px;margin-bottom:30px;}
+  .summary-box{
+    flex:1;border-radius:8px;padding:20px;text-align:center;
+    background:var(--teal-tint);border:1px solid #C7E9E5;
+  }
+  .summary-box .num{font-family:'Noto Kufi Arabic',sans-serif;font-size:36px;font-weight:900;color:var(--seal-dark);}
+  .summary-box .lbl{font-size:13px;color:var(--ink-soft);margin-top:6px;font-weight:600;}
+  section{margin-bottom:32px;}
+  section h2{font-size:18px;color:var(--seal-dark);border-bottom:2px solid var(--teal);padding-bottom:10px;margin-bottom:16px;}
+  table{width:100%;border-collapse:collapse;font-size:14px;}
+  th{background:var(--seal-dark);color:#fff;text-align:right;padding:11px 12px;font-size:12.5px;font-weight:700;}
+  th:first-child{border-radius:6px 0 0 0;}
+  th:last-child{border-radius:0 6px 0 0;}
+  td{padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:top;}
+  table.tasks-tbl tbody tr{background:var(--green-tint);}
+  table.tasks-tbl tbody tr:nth-child(even){background:#EAF3EC;}
+  table.reports-tbl tbody tr{background:var(--teal-tint);}
+  table.reports-tbl tbody tr:nth-child(even){background:#EAF7F5;}
+  .dept-breakdown{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;}
+  .dept-chip{
+    background:var(--green);color:#fff;padding:7px 16px;border-radius:20px;
+    font-size:13px;font-weight:700;
+  }
+  .empty-note{color:var(--ink-soft);font-size:14px;text-align:center;padding:20px;background:var(--paper);border-radius:6px;}
+  .report-footer{
+    margin-top:36px;padding-top:16px;border-top:2px solid var(--line);
+    font-size:12px;color:var(--ink-soft);display:flex;justify-content:space-between;
+  }
+  .print-bar{max-width:900px;margin:0 auto 16px;text-align:left;}
+  .print-bar button{
+    background:var(--seal-dark);color:#fff;border:none;padding:11px 22px;border-radius:6px;
+    font-family:'IBM Plex Sans Arabic',sans-serif;font-size:14px;font-weight:700;cursor:pointer;
+    box-shadow:0 3px 10px rgba(18,41,79,0.25);
+  }
+  .print-bar button:hover{background:var(--teal);}
+  @media print{
+    html{background:#fff;}
+    .print-bar{display:none;}
+    body{padding:0;}
+    .sheet{box-shadow:none;border-radius:0;max-width:none;border-top:6px solid var(--teal);}
+  }
 </style>
 </head>
 <body>
   <div class="print-bar"><button onclick="window.print()">🖨 طباعة / حفظ PDF</button></div>
+  <div class="sheet">
 
   <div class="report-header">
     <div>
@@ -1473,7 +1508,7 @@ function generatePeriodReport(start, end, deptId){
   <section>
     <h2>تفصيل المهام المنجزة (${completedTasks.length})</h2>
     ${completedTasks.length === 0 ? `<div class="empty-note">لا توجد مهام منجزة خلال هذه الفترة.</div>` : `
-    <table>
+    <table class="tasks-tbl">
       <thead><tr><th>المهمة</th><th>القسم</th><th>الفترة</th><th>تاريخ الإنجاز</th></tr></thead>
       <tbody>
         ${completedTasks.map(t=>`
@@ -1490,7 +1525,7 @@ function generatePeriodReport(start, end, deptId){
   <section>
     <h2>تفصيل التقارير الأسبوعية المعتمدة (${approvedReports.length})</h2>
     ${approvedReports.length === 0 ? `<div class="empty-note">لا توجد تقارير معتمدة خلال هذه الفترة.</div>` : `
-    <table>
+    <table class="reports-tbl">
       <thead><tr><th>القسم</th><th>الفترة</th><th>ملخص المحتوى</th><th>تاريخ الاعتماد</th></tr></thead>
       <tbody>
         ${approvedReports.map(r=>`
@@ -1507,6 +1542,7 @@ function generatePeriodReport(start, end, deptId){
   <div class="report-footer">
     <span>أُصدر بواسطة: ${escapeHtml(state.currentUser.full_name)}</span>
     <span>تاريخ الإصدار: ${new Date().toLocaleDateString('ar-SA')}</span>
+  </div>
   </div>
 </body>
 </html>`;
