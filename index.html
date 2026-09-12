@@ -297,6 +297,13 @@
 
   /* ===== التقرير الأسبوعي ===== */
   .weekly-panel{margin-top:22px;}
+  .completed-panel{margin-top:22px;padding:0;}
+  .completed-panel summary{
+    padding:14px 18px;font-family:'Noto Kufi Arabic',sans-serif;font-size:17px;
+    color:var(--seal-dark);cursor:pointer;border-bottom:1px solid var(--line);
+  }
+  .completed-panel[open] summary{border-bottom:1px solid var(--line);}
+  .completed-panel:not([open]) summary{border-bottom:none;}
   .weekly-form textarea{width:100%;min-height:90px;border:1px solid var(--line);border-radius:var(--radius);padding:10px;font-family:inherit;font-size:14px;color:var(--ink);background:var(--paper);resize:vertical;}
   .weekly-form{padding:16px 18px;border-bottom:1px solid var(--line);}
   .weekly-date-range{display:flex;gap:12px;margin-bottom:10px;}
@@ -583,6 +590,7 @@ async function loadAll(){
   flagOverdueLocally();
   renderStats();
   renderTasks();
+  renderCompletedTasks();
   renderDecisions();
   renderDeptFilter();
   renderWeeklyPanel();
@@ -671,6 +679,8 @@ function renderShell(){
           <ul class="decisions-list" id="decisionsList"></ul>
         </aside>
       </main>
+
+      <details class="panel completed-panel" id="completedPanel"></details>
 
       <section class="panel weekly-panel" id="weeklyPanel"></section>
     </div>
@@ -787,7 +797,11 @@ function renderTasks(){
   const isFullEditor = EDITOR_ROLES.includes(role);
   const canEditRow = (t) => isFullEditor || (role === 'department' && t.department_id === state.currentUser.department_id);
   let list = state.tasks;
-  if(state.filterStatus !== 'all') list = list.filter(t=>t._displayStatus === state.filterStatus);
+  if(state.filterStatus !== 'all'){
+    list = list.filter(t=>t._displayStatus === state.filterStatus);
+  } else {
+    list = list.filter(t=>t._displayStatus !== 'منتهية');
+  }
   if(state.filterDept !== 'all') list = list.filter(t=>t.department_id === state.filterDept);
   if(state.searchText) list = list.filter(t=>t.title.includes(state.searchText));
 
@@ -900,6 +914,36 @@ async function attachTaskDownloadLinks(){
       el.target = '_blank';
     }
   }
+}
+
+function renderCompletedTasks(){
+  const panel = document.getElementById('completedPanel');
+  const completed = state.tasks.filter(t => t._displayStatus === 'منتهية');
+
+  panel.innerHTML = `
+    <summary>✅ المهام المنجزة (${completed.length})</summary>
+    <ul class="report-list">
+      ${completed.length === 0
+        ? `<li class="empty-note">لا توجد مهام منجزة بعد.</li>`
+        : completed.map(t => `
+          <li>
+            <div class="report-meta">
+              <span class="report-dept">${escapeHtml(deptName(t.department_id))}</span>
+              — الفترة: ${t.start_date ? `${t.start_date} ← ` : ''}${t.due_date || '—'}
+            </div>
+            <div class="report-content">${escapeHtml(t.title)}</div>
+            ${t.attachment_path ? `<a href="#" id="done-attach-${t.id}" class="attach-link">📎 ${escapeHtml(t.attachment_name || 'تحميل المرفق')}</a>` : ''}
+          </li>`).join('')
+      }
+    </ul>
+  `;
+
+  completed.filter(t => t.attachment_path).forEach(async (t)=>{
+    const el = document.getElementById(`done-attach-${t.id}`);
+    if(!el) return;
+    const { data, error } = await sb.storage.from('task-attachments').createSignedUrl(t.attachment_path, 3600);
+    if(!error && data){ el.href = data.signedUrl; el.target = '_blank'; }
+  });
 }
 
 function renderDecisions(){
