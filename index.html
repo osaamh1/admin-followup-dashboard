@@ -374,7 +374,7 @@ const ROLE_LABELS = {
   member: 'عضو اللجنة',
   department: 'قسم علمي'
 };
-const EDITOR_ROLES = ['admin', 'dean', 'unit_secretary'];
+const EDITOR_ROLES = ['admin', 'dean', 'unit_secretary', 'member'];
 const INACTIVITY_LIMIT_MS = 30 * 60 * 1000; // 30 دقيقة بدون حركة
 let inactivityTimer = null;
 let inactivityWatcherStarted = false;
@@ -1127,7 +1127,10 @@ function renderWeeklyPanel(){
     // العميد / الأمين / الأدمن / الأعضاء: عرض التقارير المعلّقة فقط، والمعتمدة تنتقل لقسم منفصل
     const pending = state.weeklyReports.filter(r => r.status !== 'معتمد');
     panel.innerHTML = `
-      <div class="panel-head"><h2>التقارير الأسبوعية للأقسام (بانتظار الاعتماد)</h2></div>
+      <div class="panel-head">
+        <h2>التقارير الأسبوعية للأقسام (بانتظار الاعتماد)</h2>
+        <button class="btn-primary" id="addWeeklyReportBtn">+ تقرير أسبوعي جديد</button>
+      </div>
       <ul class="report-list">
         ${pending.length === 0
           ? `<li class="empty-note">لا توجد تقارير بانتظار الاعتماد حاليًا.</li>`
@@ -1152,6 +1155,8 @@ function renderWeeklyPanel(){
           await loadAll();
         };
       });
+
+      document.getElementById('addWeeklyReportBtn').onclick = openAddWeeklyReportModal;
     }
   }
 
@@ -1440,10 +1445,10 @@ function generatePeriodReport(start, end, deptId){
   section{margin-bottom:32px;}
   section h2{font-size:18px;color:var(--seal-dark);border-bottom:2px solid var(--teal);padding-bottom:10px;margin-bottom:16px;}
   table{width:100%;border-collapse:collapse;font-size:14px;}
-  th{background:var(--seal-dark);color:#fff;text-align:right;padding:11px 12px;font-size:12.5px;font-weight:700;}
+  th{background:var(--seal-dark);color:#fff;text-align:center;padding:11px 12px;font-size:12.5px;font-weight:700;}
   th:first-child{border-radius:6px 0 0 0;}
   th:last-child{border-radius:0 6px 0 0;}
-  td{padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:top;}
+  td{padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:middle;text-align:center;}
   table.tasks-tbl tbody tr{background:var(--green-tint);}
   table.tasks-tbl tbody tr:nth-child(even){background:#EAF3EC;}
   table.reports-tbl tbody tr{background:var(--teal-tint);}
@@ -1495,6 +1500,7 @@ function generatePeriodReport(start, end, deptId){
     <div class="summary-box"><div class="num">${Object.keys(tasksByDept).length}</div><div class="lbl">قسم مشارك بالإنجاز</div></div>
   </div>
 
+  ${deptId ? '' : `
   <section>
     <h2>توزيع المهام المنجزة حسب القسم</h2>
     <div class="dept-breakdown">
@@ -1503,7 +1509,7 @@ function generatePeriodReport(start, end, deptId){
         : Object.entries(tasksByDept).map(([name,count])=>`<span class="dept-chip">${name}: ${count}</span>`).join('')
       }
     </div>
-  </section>
+  </section>`}
 
   <section>
     <h2>تفصيل المهام المنجزة (${completedTasks.length})</h2>
@@ -1550,6 +1556,71 @@ function generatePeriodReport(start, end, deptId){
   const w = window.open('', '_blank');
   w.document.write(html);
   w.document.close();
+}
+
+function openAddWeeklyReportModal(){
+  const thisWeek = getWeekStartISO();
+  const thisWeekEnd = (()=>{ const d = new Date(thisWeek); d.setDate(d.getDate()+4); return d.toISOString().slice(0,10); })();
+  const overlay = document.getElementById('modalOverlay');
+  overlay.classList.remove('hidden');
+  overlay.innerHTML = `
+    <div class="modal">
+      <h3>تقرير أسبوعي جديد</h3>
+      <div class="field"><label>القسم</label>
+        <select id="wDept">${state.departments.map(d=>`<option value="${d.id}">${d.name}</option>`).join('')}</select>
+      </div>
+      <div class="field"><label>من تاريخ</label><input id="wStart" type="date" value="${thisWeek}"></div>
+      <div class="field"><label>إلى تاريخ</label><input id="wEnd" type="date" value="${thisWeekEnd}"></div>
+      <div class="field"><label>المحتوى</label><textarea id="wContent"></textarea></div>
+      <div class="field"><label>إرفاق ملف (اختياري)</label><input type="file" id="wFile"></div>
+      <p class="login-error hidden" id="wErr"></p>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="wCancel">إلغاء</button>
+        <button class="btn-primary" id="wSave">حفظ (يُعتمد تلقائيًا)</button>
+      </div>
+    </div>`;
+  document.getElementById('wCancel').onclick = closeModal;
+  document.getElementById('wSave').onclick = async ()=>{
+    const deptId = document.getElementById('wDept').value;
+    const startDate = document.getElementById('wStart').value;
+    const endDate = document.getElementById('wEnd').value;
+    const content = document.getElementById('wContent').value.trim();
+    const fileInput = document.getElementById('wFile');
+    const errEl = document.getElementById('wErr');
+    errEl.classList.add('hidden');
+    if(!deptId || !content || !startDate || !endDate){
+      errEl.textContent = 'عبّي كل الحقول المطلوبة.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+    if(endDate < startDate){
+      errEl.textContent = 'تاريخ النهاية لازم يكون بعد أو نفس تاريخ البداية.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+
+    let attachmentPath = null;
+    let attachmentName = null;
+    if(fileInput.files.length > 0){
+      const file = fileInput.files[0];
+      const path = `${deptId}/${Date.now()}_${sanitizeFileName(file.name)}`;
+      const { error: uploadError } = await sb.storage.from('weekly-attachments').upload(path, file);
+      if(!uploadError){ attachmentPath = path; attachmentName = file.name; }
+    }
+
+    await sb.from('weekly_reports').insert({
+      department_id: deptId,
+      week_start: startDate,
+      week_end: endDate,
+      content,
+      attachment_path: attachmentPath,
+      attachment_name: attachmentName,
+      status: 'معتمد',
+      approved_at: new Date().toISOString()
+    });
+    closeModal();
+    await loadAll();
+  };
 }
 
 init();
