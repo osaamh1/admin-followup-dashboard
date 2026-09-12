@@ -170,6 +170,21 @@
     background:none;border:1px solid var(--line);border-radius:2px;padding:2px 8px;
   }
   .edit-task-btn:hover{color:var(--seal-dark);border-color:var(--seal-dark);}
+  .task-attach{display:flex;align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap;}
+  .task-attach-upload{
+    font-size:11px;color:var(--ink-soft);cursor:pointer;
+    border:1px dashed var(--line);border-radius:2px;padding:2px 8px;
+  }
+  .task-attach-upload:hover{color:var(--seal-dark);border-color:var(--seal-dark);}
+  .review-badge{
+    font-size:11px;color:var(--amber);background:var(--amber-tint);
+    padding:2px 8px;border-radius:2px;font-weight:600;
+  }
+  .submit-approval-btn{
+    font-size:11px;color:#fff;background:var(--teal);border:none;
+    padding:3px 10px;border-radius:2px;font-weight:600;
+  }
+  .submit-approval-btn:hover{background:var(--seal-dark);}
   .date-range{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;}
   .date-arrow{color:var(--ink-soft);}
   .task-search{
@@ -783,14 +798,25 @@ function renderTasks(){
         <div class="task-title">${escapeHtml(t.title)}</div>
         ${t.notes ? `<div class="task-meta">${escapeHtml(t.notes)}</div>` : ''}
         ${decTitle ? `<div class="task-link">🔗 مرتبطة بقرار: ${escapeHtml(decTitle)}</div>` : ''}
+        <div class="task-attach">
+          ${t.attachment_path ? `<a href="#" id="task-attach-${t.id}" class="attach-link">📎 ${escapeHtml(t.attachment_name || 'تحميل المرفق')}</a>` : ''}
+          ${t.submitted_for_approval && t.status !== 'منتهية' ? `<span class="review-badge">📋 قيد المراجعة</span>` : ''}
+          ${canEdit ? `
+            <label class="task-attach-upload">
+              ${t.attachment_path ? '📎 استبدال الملف' : '📎 إرفاق ملف'}
+              <input type="file" class="task-file-input hidden" data-id="${t.id}" data-dept="${t.department_id || ''}">
+            </label>` : ''}
+          ${role === 'department' && canEdit && t.attachment_path && !t.submitted_for_approval
+            ? `<button class="submit-approval-btn" data-id="${t.id}">📤 إرسال للاعتماد</button>` : ''}
+        </div>
         ${isFullEditor ? `<button class="edit-task-btn" data-id="${t.id}">✏️ تعديل</button>` : ''}
       </td>
       <td>${escapeHtml(deptName(t.department_id))}</td>
-      <td><span class="date-range">${t.start_date ? `<span>${t.start_date}</span><span class="date-arrow">→</span>` : ''}<span>${t.due_date || '—'}</span></span></td>
+      <td><span class="date-range">${t.start_date ? `<span>${t.start_date}</span><span class="date-arrow">←</span>` : ''}<span>${t.due_date || '—'}</span></span></td>
       <td>
         ${canEdit
           ? `<select class="status-select" data-id="${t.id}">
-              ${STATUSES.map(s=>`<option value="${s}" ${t._displayStatus===s?'selected':''}>${s}</option>`).join('')}
+              ${STATUSES.filter(s => isFullEditor || s !== 'منتهية').map(s=>`<option value="${s}" ${t._displayStatus===s?'selected':''}>${s}</option>`).join('')}
             </select>`
           : `<span class="badge st-${t._displayStatus}">${t._displayStatus}</span>`
         }
@@ -814,6 +840,45 @@ function renderTasks(){
       if(task) openEditTaskModal(task);
     };
   });
+
+  body.querySelectorAll('.task-file-input').forEach(input=>{
+    input.onchange = async (e)=>{
+      const file = e.target.files[0];
+      if(!file) return;
+      const taskId = e.target.dataset.id;
+      const deptId = e.target.dataset.dept || 'general';
+      const path = `${deptId}/${Date.now()}_${sanitizeFileName(file.name)}`;
+      const { error: uploadError } = await sb.storage.from('task-attachments').upload(path, file);
+      if(uploadError){
+        alert('حدث خطأ أثناء رفع الملف، حاول مرة أخرى.');
+        return;
+      }
+      await sb.from('tasks').update({ attachment_path: path, attachment_name: file.name, submitted_for_approval: false }).eq('id', taskId);
+      await loadAll();
+    };
+  });
+
+  body.querySelectorAll('.submit-approval-btn').forEach(btn=>{
+    btn.onclick = async ()=>{
+      await sb.from('tasks').update({ submitted_for_approval: true }).eq('id', btn.dataset.id);
+      await loadAll();
+    };
+  });
+
+  attachTaskDownloadLinks();
+}
+
+async function attachTaskDownloadLinks(){
+  const withAttachments = state.tasks.filter(t => t.attachment_path);
+  for(const t of withAttachments){
+    const el = document.getElementById(`task-attach-${t.id}`);
+    if(!el) continue;
+    const { data, error } = await sb.storage.from('task-attachments').createSignedUrl(t.attachment_path, 3600);
+    if(!error && data){
+      el.href = data.signedUrl;
+      el.target = '_blank';
+    }
+  }
 }
 
 function renderDecisions(){
