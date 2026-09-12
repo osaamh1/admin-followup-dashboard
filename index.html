@@ -304,6 +304,25 @@
   }
   .completed-panel[open] summary{border-bottom:1px solid var(--line);}
   .completed-panel:not([open]) summary{border-bottom:none;}
+  .approved-reports-panel{margin-top:22px;padding:0;}
+  .approved-reports-panel summary{
+    padding:14px 18px;font-family:'Noto Kufi Arabic',sans-serif;font-size:17px;
+    color:var(--seal-dark);cursor:pointer;
+  }
+  .dept-completed-group{border-bottom:1px solid var(--line);}
+  .dept-completed-group:last-child{border-bottom:none;}
+  .dept-completed-group summary{
+    padding:10px 18px;font-size:13px;font-weight:600;color:var(--seal-dark);
+    cursor:pointer;background:var(--paper);
+  }
+  .badge-inline{display:inline-block;margin-right:6px;font-size:11px;padding:2px 8px;border-radius:2px;font-weight:600;}
+  .badge-pending{background:var(--amber-tint);color:var(--amber);}
+  .badge-approved{background:var(--green-tint);color:var(--green);}
+  .approve-report-btn{
+    display:inline-block;margin-top:6px;font-size:11px;color:#fff;background:var(--green);
+    border:none;padding:3px 10px;border-radius:2px;font-weight:600;
+  }
+  .approve-report-btn:hover{background:var(--seal-dark);}
   .weekly-form textarea{width:100%;min-height:90px;border:1px solid var(--line);border-radius:var(--radius);padding:10px;font-family:inherit;font-size:14px;color:var(--ink);background:var(--paper);resize:vertical;}
   .weekly-form{padding:16px 18px;border-bottom:1px solid var(--line);}
   .weekly-date-range{display:flex;gap:12px;margin-bottom:10px;}
@@ -680,9 +699,11 @@ function renderShell(){
         </aside>
       </main>
 
-      <details class="panel completed-panel" id="completedPanel"></details>
-
       <section class="panel weekly-panel" id="weeklyPanel"></section>
+
+      <details class="panel approved-reports-panel hidden" id="approvedReportsPanel"></details>
+
+      <details class="panel completed-panel" id="completedPanel"></details>
     </div>
     <div id="modalOverlay" class="modal-overlay hidden"></div>
   `;
@@ -919,23 +940,42 @@ async function attachTaskDownloadLinks(){
 function renderCompletedTasks(){
   const panel = document.getElementById('completedPanel');
   const completed = state.tasks.filter(t => t._displayStatus === 'منتهية');
+  const role = state.currentUser.role;
+
+  const taskItemHtml = (t) => `
+    <li>
+      <div class="report-meta">
+        <span class="report-dept">${escapeHtml(deptName(t.department_id))}</span>
+        — الفترة: ${t.start_date ? `${t.start_date} ← ` : ''}${t.due_date || '—'}
+      </div>
+      <div class="report-content">${escapeHtml(t.title)}</div>
+      ${t.attachment_path ? `<a href="#" id="done-attach-${t.id}" class="attach-link">📎 ${escapeHtml(t.attachment_name || 'تحميل المرفق')}</a>` : ''}
+    </li>`;
+
+  let bodyHtml;
+  if(role === 'department' || completed.length === 0){
+    bodyHtml = completed.length === 0
+      ? `<div class="empty-note">لا توجد مهام منجزة بعد.</div>`
+      : `<ul class="report-list">${completed.map(taskItemHtml).join('')}</ul>`;
+  } else {
+    // تجميع حسب القسم لأصحاب الصلاحية الكاملة والأعضاء
+    const byDept = {};
+    completed.forEach(t=>{
+      const key = t.department_id || 'none';
+      if(!byDept[key]) byDept[key] = [];
+      byDept[key].push(t);
+    });
+    bodyHtml = Object.entries(byDept).map(([deptId, tasks])=>`
+      <details class="dept-completed-group">
+        <summary>${escapeHtml(deptName(deptId === 'none' ? null : deptId))} (${tasks.length})</summary>
+        <ul class="report-list">${tasks.map(taskItemHtml).join('')}</ul>
+      </details>
+    `).join('');
+  }
 
   panel.innerHTML = `
     <summary>✅ المهام المنجزة (${completed.length})</summary>
-    <ul class="report-list">
-      ${completed.length === 0
-        ? `<li class="empty-note">لا توجد مهام منجزة بعد.</li>`
-        : completed.map(t => `
-          <li>
-            <div class="report-meta">
-              <span class="report-dept">${escapeHtml(deptName(t.department_id))}</span>
-              — الفترة: ${t.start_date ? `${t.start_date} ← ` : ''}${t.due_date || '—'}
-            </div>
-            <div class="report-content">${escapeHtml(t.title)}</div>
-            ${t.attachment_path ? `<a href="#" id="done-attach-${t.id}" class="attach-link">📎 ${escapeHtml(t.attachment_name || 'تحميل المرفق')}</a>` : ''}
-          </li>`).join('')
-      }
-    </ul>
+    ${bodyHtml}
   `;
 
   completed.filter(t => t.attachment_path).forEach(async (t)=>{
@@ -1013,6 +1053,7 @@ function renderDeptChart(){
 function renderWeeklyPanel(){
   const panel = document.getElementById('weeklyPanel');
   const role = state.currentUser.role;
+  const isFullEditor = EDITOR_ROLES.includes(role);
   const thisWeek = getWeekStartISO();
   const thisWeekEnd = (()=>{ const d = new Date(thisWeek); d.setDate(d.getDate()+4); return d.toISOString().slice(0,10); })();
 
@@ -1040,7 +1081,9 @@ function renderWeeklyPanel(){
           ? `<li class="empty-note">لا توجد تقارير سابقة مرسلة.</li>`
           : myReports.map(r => `
             <li>
-              <div class="report-meta">الفترة: ${r.week_start} إلى ${r.week_end || r.week_start} — أُرسل بتاريخ ${new Date(r.submitted_at).toLocaleDateString('ar-SA')}</div>
+              <div class="report-meta">الفترة: ${r.week_start} إلى ${r.week_end || r.week_start} — أُرسل بتاريخ ${new Date(r.submitted_at).toLocaleDateString('ar-SA')}
+                <span class="badge-inline ${r.status === 'معتمد' ? 'badge-approved' : 'badge-pending'}">${r.status === 'معتمد' ? '✅ معتمد' : '📋 قيد المراجعة'}</span>
+              </div>
               <div class="report-content">${escapeHtml(r.content || '')}</div>
               ${r.attachment_path ? `<a href="#" id="attach-${r.id}" class="attach-link">📎 ${escapeHtml(r.attachment_name || 'تحميل المرفق')}</a>` : ''}
             </li>`).join('')
@@ -1080,13 +1123,14 @@ function renderWeeklyPanel(){
     };
 
   } else {
-    // العميد / الأمين / الأدمن: عرض كل التقارير المرسلة من كل الأقسام
+    // العميد / الأمين / الأدمن / الأعضاء: عرض التقارير المعلّقة فقط، والمعتمدة تنتقل لقسم منفصل
+    const pending = state.weeklyReports.filter(r => r.status !== 'معتمد');
     panel.innerHTML = `
-      <div class="panel-head"><h2>التقارير الأسبوعية للأقسام</h2></div>
+      <div class="panel-head"><h2>التقارير الأسبوعية للأقسام (بانتظار الاعتماد)</h2></div>
       <ul class="report-list">
-        ${state.weeklyReports.length === 0
-          ? `<li class="empty-note">لا توجد تقارير مرسلة من الأقسام بعد.</li>`
-          : state.weeklyReports.map(r => `
+        ${pending.length === 0
+          ? `<li class="empty-note">لا توجد تقارير بانتظار الاعتماد حاليًا.</li>`
+          : pending.map(r => `
             <li>
               <div class="report-meta">
                 <span class="report-dept">${escapeHtml(deptName(r.department_id))}</span>
@@ -1094,13 +1138,57 @@ function renderWeeklyPanel(){
               </div>
               <div class="report-content">${escapeHtml(r.content || '')}</div>
               ${r.attachment_path ? `<a href="#" id="attach-${r.id}" class="attach-link">📎 ${escapeHtml(r.attachment_name || 'تحميل المرفق')}</a>` : ''}
+              ${isFullEditor ? `<button class="approve-report-btn" data-id="${r.id}">✅ اعتماد التقرير</button>` : ''}
             </li>`).join('')
         }
       </ul>
     `;
+
+    if(isFullEditor){
+      panel.querySelectorAll('.approve-report-btn').forEach(btn=>{
+        btn.onclick = async ()=>{
+          await sb.from('weekly_reports').update({ status: 'معتمد' }).eq('id', btn.dataset.id);
+          await loadAll();
+        };
+      });
+    }
   }
 
   attachDownloadLinks();
+  renderApprovedReports();
+}
+
+function renderApprovedReports(){
+  const panel = document.getElementById('approvedReportsPanel');
+  const role = state.currentUser.role;
+  if(role === 'department'){ panel.classList.add('hidden'); return; }
+  panel.classList.remove('hidden');
+
+  const approved = state.weeklyReports.filter(r => r.status === 'معتمد');
+  panel.innerHTML = `
+    <summary>📄 التقارير المعتمدة (${approved.length})</summary>
+    <ul class="report-list">
+      ${approved.length === 0
+        ? `<li class="empty-note">لا توجد تقارير معتمدة بعد.</li>`
+        : approved.map(r => `
+          <li>
+            <div class="report-meta">
+              <span class="report-dept">${escapeHtml(deptName(r.department_id))}</span>
+              — الفترة: ${r.week_start} إلى ${r.week_end || r.week_start}
+            </div>
+            <div class="report-content">${escapeHtml(r.content || '')}</div>
+            ${r.attachment_path ? `<a href="#" id="approved-attach-${r.id}" class="attach-link">📎 ${escapeHtml(r.attachment_name || 'تحميل المرفق')}</a>` : ''}
+          </li>`).join('')
+      }
+    </ul>
+  `;
+
+  approved.filter(r => r.attachment_path).forEach(async (r)=>{
+    const el = document.getElementById(`approved-attach-${r.id}`);
+    if(!el) return;
+    const { data, error } = await sb.storage.from('weekly-attachments').createSignedUrl(r.attachment_path, 3600);
+    if(!error && data){ el.href = data.signedUrl; el.target = '_blank'; }
+  });
 }
 
 async function attachDownloadLinks(){
