@@ -670,7 +670,7 @@ async function loadAll(){
   renderCompletedTasks();
   renderDecisions();
   renderDeptFilter();
-  renderWeeklyPanel();
+  // renderWeeklyPanel(); // تم إخفاء خدمة "تقارير داعمة" من الواجهة (البيانات محفوظة، يمكن إعادة تفعيلها لاحقًا)
   renderDeptChart();
   renderAbsences();
   renderRemoteRequests();
@@ -766,7 +766,7 @@ function renderShell(){
         </aside>
       </main>
 
-      <section class="panel weekly-panel" id="weeklyPanel"></section>
+      <section class="panel weekly-panel hidden" id="weeklyPanel"></section>
 
       <details class="panel pending-requests-panel hidden" id="pendingRequestsPanel"></details>
 
