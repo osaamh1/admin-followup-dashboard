@@ -353,6 +353,9 @@
 
   /* ===== الرسم البياني لإنجاز الأقسام ===== */
   .dept-chart-panel{margin-bottom:22px;}
+  .absences-panel{margin-bottom:22px;padding:0;overflow-x:auto;}
+  .absences-table{font-size:13px;}
+  .absences-table th, .absences-table td{white-space:nowrap;}
   .dept-chart{padding:18px;display:flex;flex-direction:column;gap:14px;}
   .chart-row{display:flex;align-items:center;gap:12px;}
   .chart-label{width:190px;flex-shrink:0;font-size:13px;color:var(--ink);font-weight:600;}
@@ -393,7 +396,7 @@ let inactivityTimer = null;
 let inactivityWatcherStarted = false;
 
 let sb = null;
-let state = { tasks:[], decisions:[], departments:[], weeklyReports:[], filterStatus:'all', filterDept:'all', searchText:'', currentUser:null };
+let state = { tasks:[], decisions:[], departments:[], weeklyReports:[], absences:[], filterStatus:'all', filterDept:'all', searchText:'', currentUser:null };
 
 function isConfigured(){
   return SUPABASE_URL && SUPABASE_URL.startsWith('http') && SUPABASE_ANON_KEY && SUPABASE_ANON_KEY.length > 10;
@@ -609,16 +612,18 @@ function startInactivityWatcher(){
 }
 
 async function loadAll(){
-  const [{data:tasks}, {data:decisions}, {data:departments}, {data:weeklyReports}] = await Promise.all([
+  const [{data:tasks}, {data:decisions}, {data:departments}, {data:weeklyReports}, {data:absences}] = await Promise.all([
     sb.from('tasks').select('*').order('due_date', {ascending:true, nullsFirst:false}),
     sb.from('decisions').select('*').eq('status','active').order('decision_date', {ascending:false}),
     sb.from('departments').select('*').order('name'),
-    sb.from('weekly_reports').select('*').order('week_start', {ascending:false})
+    sb.from('weekly_reports').select('*').order('week_start', {ascending:false}),
+    sb.from('faculty_absences').select('*').order('absence_date', {ascending:false})
   ]);
   state.tasks = tasks || [];
   state.decisions = decisions || [];
   state.departments = departments || [];
   state.weeklyReports = weeklyReports || [];
+  state.absences = absences || [];
   flagOverdueLocally();
   renderStats();
   renderTasks();
@@ -627,6 +632,7 @@ async function loadAll(){
   renderDeptFilter();
   renderWeeklyPanel();
   renderDeptChart();
+  renderAbsences();
 }
 
 function flagOverdueLocally(){
@@ -679,6 +685,8 @@ function renderShell(){
       <section class="stat-strip" id="statStrip"></section>
 
       <section class="panel dept-chart-panel hidden" id="deptChartPanel"></section>
+
+      <section class="panel absences-panel" id="absencesPanel"></section>
 
       <main class="layout">
         <section class="panel tasks-panel">
@@ -1067,6 +1075,134 @@ function renderDeptChart(){
   `;
 }
 
+function renderAbsences(){
+  const panel = document.getElementById('absencesPanel');
+  const role = state.currentUser.role;
+  const isFullEditor = EDITOR_ROLES.includes(role);
+  const list = role === 'department'
+    ? state.absences.filter(a => a.department_id === state.currentUser.department_id)
+    : state.absences;
+
+  const rows = list.map(a => `
+    <tr>
+      <td>${escapeHtml(a.faculty_name)}</td>
+      ${role === 'department' ? '' : `<td>${escapeHtml(deptName(a.department_id))}</td>`}
+      <td>${escapeHtml(a.course_name || '—')}</td>
+      <td>${escapeHtml(a.section_number || '—')}</td>
+      <td>${a.absence_date || '—'}</td>
+      <td>${escapeHtml(a.absence_time || '—')}</td>
+      <td>${escapeHtml(a.room || '—')}</td>
+      <td><span class="badge ${a.absence_type === 'بعذر' ? 'st-جارية' : 'st-متعثرة'}">${escapeHtml(a.absence_type || '—')}</span></td>
+      <td>${a.document_path ? `<a href="#" id="absdoc-${a.id}" class="attach-link">📎 ${escapeHtml(a.document_name || 'المستند')}</a>` : '—'}</td>
+      <td>${escapeHtml(a.head_notes || '—')}</td>
+    </tr>
+  `).join('');
+
+  panel.innerHTML = `
+    <div class="panel-head">
+      <h2>📆 تقرير القسم الأسبوعي</h2>
+      <button class="btn-primary" id="addAbsenceBtn">+ تسجيل غياب</button>
+    </div>
+    <table class="tasks-table absences-table">
+      <thead>
+        <tr>
+          <th>عضو هيئة التدريس</th>
+          ${role === 'department' ? '' : '<th>القسم</th>'}
+          <th>اسم المادة</th>
+          <th>رقم الشعبة</th>
+          <th>التاريخ</th>
+          <th>الوقت</th>
+          <th>القاعة</th>
+          <th>نوع الغياب</th>
+          <th>المستند</th>
+          <th>ملاحظات رئيس القسم</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${list.length === 0 ? `<tr class="empty-row"><td colspan="${role==='department'?9:10}">لا توجد غيابات مسجّلة بعد.</td></tr>` : rows}
+      </tbody>
+    </table>
+  `;
+
+  document.getElementById('addAbsenceBtn').onclick = openAddAbsenceModal;
+
+  list.filter(a => a.document_path).forEach(async (a)=>{
+    const el = document.getElementById(`absdoc-${a.id}`);
+    if(!el) return;
+    const { data, error } = await sb.storage.from('absence-documents').createSignedUrl(a.document_path, 3600);
+    if(!error && data){ el.href = data.signedUrl; el.target = '_blank'; }
+  });
+}
+
+function openAddAbsenceModal(){
+  const role = state.currentUser.role;
+  const isFullEditor = EDITOR_ROLES.includes(role);
+  const overlay = document.getElementById('modalOverlay');
+  overlay.classList.remove('hidden');
+  overlay.innerHTML = `
+    <div class="modal">
+      <h3>تسجيل غياب عضو هيئة تدريس</h3>
+      ${isFullEditor ? `
+      <div class="field"><label>القسم</label>
+        <select id="absDept">${state.departments.map(d=>`<option value="${d.id}">${d.name}</option>`).join('')}</select>
+      </div>` : ''}
+      <div class="field"><label>عضو هيئة التدريس</label><input id="absFaculty" type="text"></div>
+      <div class="field"><label>اسم المادة</label><input id="absCourse" type="text"></div>
+      <div class="field"><label>رقم الشعبة</label><input id="absSection" type="text"></div>
+      <div class="field"><label>التاريخ</label><input id="absDate" type="date"></div>
+      <div class="field"><label>الوقت</label><input id="absTime" type="text" placeholder="مثال: 9:00 - 10:00"></div>
+      <div class="field"><label>القاعة</label><input id="absRoom" type="text"></div>
+      <div class="field"><label>نوع الغياب</label>
+        <select id="absType"><option value="بعذر">بعذر</option><option value="بدون عذر">بدون عذر</option></select>
+      </div>
+      <div class="field"><label>مستند الغياب (اختياري)</label><input type="file" id="absFile"></div>
+      <div class="field"><label>ملاحظات رئيس القسم</label><textarea id="absNotes"></textarea></div>
+      <p class="login-error hidden" id="absErr"></p>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="absCancel">إلغاء</button>
+        <button class="btn-primary" id="absSave">حفظ</button>
+      </div>
+    </div>`;
+  document.getElementById('absCancel').onclick = closeModal;
+  document.getElementById('absSave').onclick = async ()=>{
+    const deptId = isFullEditor ? document.getElementById('absDept').value : state.currentUser.department_id;
+    const facultyName = document.getElementById('absFaculty').value.trim();
+    const fileInput = document.getElementById('absFile');
+    const errEl = document.getElementById('absErr');
+    errEl.classList.add('hidden');
+    if(!deptId || !facultyName){
+      errEl.textContent = 'لازم تحدد القسم واسم عضو هيئة التدريس على الأقل.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+
+    let documentPath = null;
+    let documentName = null;
+    if(fileInput.files.length > 0){
+      const file = fileInput.files[0];
+      const path = `${deptId}/${Date.now()}_${sanitizeFileName(file.name)}`;
+      const { error: uploadError } = await sb.storage.from('absence-documents').upload(path, file);
+      if(!uploadError){ documentPath = path; documentName = file.name; }
+    }
+
+    await sb.from('faculty_absences').insert({
+      department_id: deptId,
+      faculty_name: facultyName,
+      course_name: document.getElementById('absCourse').value || null,
+      section_number: document.getElementById('absSection').value || null,
+      absence_date: document.getElementById('absDate').value || null,
+      absence_time: document.getElementById('absTime').value || null,
+      room: document.getElementById('absRoom').value || null,
+      absence_type: document.getElementById('absType').value,
+      document_path: documentPath,
+      document_name: documentName,
+      head_notes: document.getElementById('absNotes').value || null
+    });
+    closeModal();
+    await loadAll();
+  };
+}
+
 function renderWeeklyPanel(){
   const panel = document.getElementById('weeklyPanel');
   const role = state.currentUser.role;
@@ -1082,7 +1218,7 @@ function renderWeeklyPanel(){
 
     panel.innerHTML = `
       ${myRequests.length > 0 ? `
-      <div class="panel-head"><h2>📥 طلبات تقارير موجّهة لكم</h2></div>
+      <div class="panel-head"><h2>📥 طلبات تقارير داعمة موجّهة لكم</h2></div>
       <ul class="report-list">
         ${myRequests.map(r => `
           <li class="request-item">
@@ -1095,7 +1231,7 @@ function renderWeeklyPanel(){
       </ul>
       ` : ''}
 
-      <div class="panel-head"><h2>التقرير الأسبوعي</h2></div>
+      <div class="panel-head"><h2>تقارير داعمة</h2></div>
       <div class="weekly-form">
         <p class="weekly-week-label">حدّد فترة التقرير:</p>
         <div class="weekly-date-range">
@@ -1187,8 +1323,8 @@ function renderWeeklyPanel(){
     const pending = state.weeklyReports.filter(r => r.status === 'قيد المراجعة');
     panel.innerHTML = `
       <div class="panel-head">
-        <h2>التقارير الأسبوعية للأقسام (بانتظار الاعتماد)</h2>
-        <button class="btn-primary" id="addWeeklyReportBtn">+ طلب تقرير أسبوعي</button>
+        <h2>التقارير الداعمة للأقسام (بانتظار الاعتماد)</h2>
+        <button class="btn-primary" id="addWeeklyReportBtn">+ طلب تقرير داعم</button>
       </div>
       <ul class="report-list">
         ${pending.length === 0
@@ -1257,7 +1393,7 @@ function renderApprovedReports(){
 
   const approved = state.weeklyReports.filter(r => r.status === 'معتمد');
   panel.innerHTML = `
-    <summary>📄 التقارير المعتمدة (${approved.length})</summary>
+    <summary>📄 التقارير الداعمة المعتمدة (${approved.length})</summary>
     <ul class="report-list">
       ${approved.length === 0
         ? `<li class="empty-note">لا توجد تقارير معتمدة بعد.</li>`
@@ -1652,7 +1788,7 @@ function openAddWeeklyReportModal(){
   overlay.classList.remove('hidden');
   overlay.innerHTML = `
     <div class="modal">
-      <h3>طلب تقرير أسبوعي من قسم</h3>
+      <h3>طلب تقرير داعم من قسم</h3>
       <div class="field"><label>القسم</label>
         <select id="wDept">${state.departments.map(d=>`<option value="${d.id}">${d.name}</option>`).join('')}</select>
       </div>
