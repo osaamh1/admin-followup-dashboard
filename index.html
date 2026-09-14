@@ -1355,6 +1355,7 @@ function renderRemoteRequests(){
 
 function remoteRowTemplate(idx){
   const timeOpts = absenceTimeOptions().map(t=>`<option value="${t}">${t}</option>`).join('');
+  const today = new Date().toISOString().slice(0,10);
   return `
     <div class="abs-row" data-idx="${idx}">
       <div class="abs-row-head">
@@ -1363,7 +1364,7 @@ function remoteRowTemplate(idx){
       </div>
       <div class="field"><label>عضو هيئة التدريس</label><input class="remFaculty" type="text"></div>
       <div class="field"><label>اسم المادة</label><input class="remCourse" type="text"></div>
-      <div class="field"><label>تاريخ المحاضرة</label><input class="remDate" type="date"></div>
+      <div class="field"><label>تاريخ المحاضرة</label><input class="remDate" type="date" min="${today}"></div>
       <div class="field"><label>الوقت</label>
         <select class="remTime"><option value="">— اختر الوقت —</option>${timeOpts}</select>
       </div>
@@ -1427,15 +1428,22 @@ function openAddRemoteModal(){
     const sharedNotes = document.getElementById('remNotes').value || null;
     const rowEls = [...rowsContainer.querySelectorAll('.abs-row')];
     const entries = [];
+    const today = new Date().toISOString().slice(0,10);
 
     for(const rowEl of rowEls){
       const facultyName = rowEl.querySelector('.remFaculty').value.trim();
       if(!facultyName) continue;
+      const lectureDate = rowEl.querySelector('.remDate').value || null;
+      if(lectureDate && lectureDate < today){
+        errEl.textContent = 'لا يمكن تسجيل طلب تحويل لتاريخ سابق — التاريخ لازم يكون اليوم أو بعده.';
+        errEl.classList.remove('hidden');
+        return;
+      }
       entries.push({
         department_id: deptId,
         faculty_name: facultyName,
         course_name: rowEl.querySelector('.remCourse').value || null,
-        lecture_date: rowEl.querySelector('.remDate').value || null,
+        lecture_date: lectureDate,
         lecture_time: rowEl.querySelector('.remTime').value || null,
         justification: rowEl.querySelector('.remJustification').value || null,
         head_notes: sharedNotes
