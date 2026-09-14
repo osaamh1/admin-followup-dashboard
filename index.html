@@ -1368,7 +1368,7 @@ function remoteRowTemplate(idx){
       <div class="field"><label>الوقت</label>
         <select class="remTime"><option value="">— اختر الوقت —</option>${timeOpts}</select>
       </div>
-      <div class="field"><label>مسوغات الطلب</label><textarea class="remJustification"></textarea></div>
+      <div class="field"><label>مسوغات الطلب <span class="required-mark">*</span></label><textarea class="remJustification"></textarea></div>
     </div>`;
 }
 
@@ -1387,8 +1387,8 @@ function openAddRemoteModal(){
         <select id="remDept">${state.departments.map(d=>`<option value="${d.id}">${d.name}</option>`).join('')}</select>
       </div>` : ''}
       <div id="remRowsContainer">${remoteRowTemplate(0)}</div>
+      <div class="field" style="margin-top:14px;"><label>مرئيات رئيس القسم حيال الطلب <span class="required-mark">*</span></label><textarea id="remNotes"></textarea></div>
       <button type="button" class="btn-text" id="remAddRow">+ إضافة طلب آخر</button>
-      <div class="field" style="margin-top:14px;"><label>مرئيات رئيس القسم حيال الطلب</label><textarea id="remNotes"></textarea></div>
       <p class="login-error hidden" id="remErr"></p>
       <div class="modal-actions">
         <button class="btn-ghost" id="remCancel">إلغاء</button>
@@ -1425,14 +1425,35 @@ function openAddRemoteModal(){
       return;
     }
 
-    const sharedNotes = document.getElementById('remNotes').value || null;
+    const sharedNotes = document.getElementById('remNotes').value.trim();
+    if(!sharedNotes){
+      errEl.textContent = 'لازم تكتب مرئيات رئيس القسم حيال الطلب قبل الحفظ.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+
     const rowEls = [...rowsContainer.querySelectorAll('.abs-row')];
+    const filledRows = rowEls.filter(rowEl => rowEl.querySelector('.remFaculty').value.trim());
+
+    if(filledRows.length === 0){
+      errEl.textContent = 'لازم تعبّي اسم عضو هيئة تدريس وحد على الأقل.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+
+    for(const rowEl of filledRows){
+      if(!rowEl.querySelector('.remJustification').value.trim()){
+        errEl.textContent = 'مسوغات الطلب إلزامية لكل طلب مسجّل.';
+        errEl.classList.remove('hidden');
+        return;
+      }
+    }
+
     const entries = [];
     const today = new Date().toISOString().slice(0,10);
 
-    for(const rowEl of rowEls){
+    for(const rowEl of filledRows){
       const facultyName = rowEl.querySelector('.remFaculty').value.trim();
-      if(!facultyName) continue;
       const lectureDate = rowEl.querySelector('.remDate').value || null;
       if(lectureDate && lectureDate < today){
         errEl.textContent = 'لا يمكن تسجيل طلب تحويل لتاريخ سابق — التاريخ لازم يكون اليوم أو بعده.';
@@ -1445,7 +1466,7 @@ function openAddRemoteModal(){
         course_name: rowEl.querySelector('.remCourse').value || null,
         lecture_date: lectureDate,
         lecture_time: rowEl.querySelector('.remTime').value || null,
-        justification: rowEl.querySelector('.remJustification').value || null,
+        justification: rowEl.querySelector('.remJustification').value.trim(),
         head_notes: sharedNotes
       });
     }
