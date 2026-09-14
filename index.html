@@ -380,7 +380,11 @@
   /* ===== الرسم البياني لإنجاز الأقسام ===== */
   .dept-chart-panel{margin-bottom:22px;}
   .absences-panel{margin-bottom:22px;padding:0;overflow-x:auto;}
-  .remote-panel{margin-bottom:22px;padding:0;overflow-x:auto;}
+  .remote-panel{margin-bottom:22px;overflow-x:auto;}
+  .remote-panel summary{
+    padding:14px 18px;font-family:'Noto Kufi Arabic',sans-serif;font-size:17px;
+    color:var(--seal-dark);cursor:pointer;
+  }
   .absences-table{font-size:13px;}
   .absences-table th, .absences-table td{white-space:nowrap;}
   .dept-chart{padding:18px;display:flex;flex-direction:column;gap:14px;}
@@ -719,7 +723,7 @@ function renderShell(){
 
       <section class="panel absences-panel" id="absencesPanel"></section>
 
-      <section class="panel remote-panel" id="remotePanel"></section>
+      <details class="panel remote-panel" id="remotePanel"></details>
 
       <main class="layout">
         <section class="panel tasks-panel">
@@ -1156,7 +1160,7 @@ function renderAbsences(){
   panel.innerHTML = `
     <div class="panel-head">
       <h2>📆 تقرير القسم الأسبوعي</h2>
-      <button class="btn-primary" id="addAbsenceBtn">+ تسجيل غياب</button>
+      <button class="btn-primary" id="addAbsenceBtn">+ رفع التقرير</button>
     </div>
     <table class="tasks-table absences-table">
       <thead>
@@ -1214,13 +1218,6 @@ function renderServicesArchive(){
     : state.absences;
   const decidedAbsences = scopedAbsences.filter(a => a.status === 'مقبول' || a.status === 'مرفوض');
 
-  const scopedRemote = role === 'department'
-    ? state.remoteRequests.filter(r => r.department_id === state.currentUser.department_id)
-    : state.remoteRequests;
-  const decidedRemote = scopedRemote.filter(r => r.status === 'مقبول' || r.status === 'مرفوض');
-
-  const total = decidedAbsences.length + decidedRemote.length;
-
   const badgeFor = (status) => status === 'مقبول'
     ? `<span class="badge-inline badge-approved">✅ مقبول</span>`
     : `<span class="badge-inline badge-rejected">❌ مرفوض</span>`;
@@ -1235,25 +1232,10 @@ function renderServicesArchive(){
       ${a.decision_note ? `<div class="rejection-note">${escapeHtml(a.decision_note)}</div>` : ''}
     </li>`).join('');
 
-  const remoteItems = decidedRemote.map(r => `
-    <li>
-      <div class="report-meta">
-        ${role === 'department' ? '' : `<span class="report-dept">${escapeHtml(deptName(r.department_id))}</span> — `}
-        ${escapeHtml(r.faculty_name)} — ${escapeHtml(r.course_name || '—')} — ${r.lecture_date || '—'}
-        ${badgeFor(r.status)}
-      </div>
-      ${r.decision_note ? `<div class="rejection-note">${escapeHtml(r.decision_note)}</div>` : ''}
-    </li>`).join('');
-
   panel.innerHTML = `
-    <summary>📋 التقارير الأسبوعية (${total})</summary>
-    <div class="panel-head"><h2 style="font-size:14px;">غيابات أعضاء هيئة التدريس</h2></div>
+    <summary>📋 التقارير الأسبوعية (${decidedAbsences.length})</summary>
     <ul class="report-list">
       ${decidedAbsences.length === 0 ? `<li class="empty-note">لا توجد غيابات محسومة بعد.</li>` : absenceItems}
-    </ul>
-    <div class="panel-head"><h2 style="font-size:14px;">طلبات تحويل المحاضرات لعن بعد</h2></div>
-    <ul class="report-list">
-      ${decidedRemote.length === 0 ? `<li class="empty-note">لا توجد طلبات محسومة بعد.</li>` : remoteItems}
     </ul>
   `;
 }
@@ -1262,10 +1244,9 @@ function renderRemoteRequests(){
   const panel = document.getElementById('remotePanel');
   const role = state.currentUser.role;
   const isFullEditor = EDITOR_ROLES.includes(role);
-  const scoped = role === 'department'
+  const list = role === 'department'
     ? state.remoteRequests.filter(r => r.department_id === state.currentUser.department_id)
     : state.remoteRequests;
-  const list = scoped.filter(r => r.status === 'قيد المراجعة' || !r.status);
 
   const decisionCell = (item, kind) => {
     if(item.status === 'مقبول') return `<span class="badge-inline badge-approved">✅ مقبول</span>`;
@@ -1288,8 +1269,9 @@ function renderRemoteRequests(){
   `).join('');
 
   panel.innerHTML = `
+    <summary>📡 طلبات تحويل المحاضرات (${list.length})</summary>
     <div class="panel-head">
-      <h2>📡 طلب تحويل محاضرة حضورية إلى عن بعد</h2>
+      <h2 style="font-size:14px;">تحويل محاضرة حضورية إلى عن بعد</h2>
       <button class="btn-primary" id="addRemoteBtn">+ تسجيل طلب</button>
     </div>
     <table class="tasks-table absences-table">
@@ -2011,10 +1993,12 @@ function generatePeriodReport(start, end, deptId){
   let completedTasks = state.tasks.filter(t => t.status === 'منتهية' && inRange(t.last_update));
   let approvedReports = state.weeklyReports.filter(r => r.status === 'معتمد' && inRange(r.approved_at));
   let absences = state.absences.filter(a => inRange(a.absence_date));
+  let remoteRequests = state.remoteRequests.filter(r => inRange(r.lecture_date));
   if(deptId){
     completedTasks = completedTasks.filter(t => t.department_id === deptId);
     approvedReports = approvedReports.filter(r => r.department_id === deptId);
     absences = absences.filter(a => a.department_id === deptId);
+    remoteRequests = remoteRequests.filter(r => r.department_id === deptId);
   }
   const scopeLabel = deptId ? deptName(deptId) : 'كل الأقسام';
 
@@ -2140,6 +2124,44 @@ function generatePeriodReport(start, end, deptId){
   </section>`}
 
   <section>
+    <h2>تقرير القسم الأسبوعي (${absences.length})</h2>
+    ${absences.length === 0 ? `<div class="empty-note">لا توجد غيابات مسجّلة خلال هذه الفترة.</div>` : `
+    <table class="absences-tbl">
+      <thead><tr>${deptId ? '' : '<th>القسم</th>'}<th>عضو هيئة التدريس</th><th>المادة</th><th>التاريخ</th><th>الوقت</th><th>نوع الغياب</th></tr></thead>
+      <tbody>
+        ${absences.map(a=>`
+          <tr class="${a.absence_type === 'بعذر' ? 'row-excused' : 'row-unexcused'}">
+            ${deptId ? '' : `<td>${escapeHtml(deptName(a.department_id))}</td>`}
+            <td>${escapeHtml(a.faculty_name)}</td>
+            <td>${escapeHtml(a.course_name || '—')}</td>
+            <td>${a.absence_date || '—'}</td>
+            <td>${escapeHtml(a.absence_time || '—')}</td>
+            <td>${escapeHtml(a.absence_type || '—')}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`}
+  </section>
+
+  <section>
+    <h2>طلبات تحويل المحاضرات (${remoteRequests.length})</h2>
+    ${remoteRequests.length === 0 ? `<div class="empty-note">لا توجد طلبات تحويل خلال هذه الفترة.</div>` : `
+    <table class="reports-tbl">
+      <thead><tr>${deptId ? '' : '<th>القسم</th>'}<th>عضو هيئة التدريس</th><th>المادة</th><th>التاريخ</th><th>الوقت</th><th>القرار</th></tr></thead>
+      <tbody>
+        ${remoteRequests.map(r=>`
+          <tr>
+            ${deptId ? '' : `<td>${escapeHtml(deptName(r.department_id))}</td>`}
+            <td>${escapeHtml(r.faculty_name)}</td>
+            <td>${escapeHtml(r.course_name || '—')}</td>
+            <td>${r.lecture_date || '—'}</td>
+            <td>${escapeHtml(r.lecture_time || '—')}</td>
+            <td>${escapeHtml(r.status || 'قيد المراجعة')}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`}
+  </section>
+
+  <section>
     <h2>تفصيل المهام المنجزة (${completedTasks.length})</h2>
     ${completedTasks.length === 0 ? `<div class="empty-note">لا توجد مهام منجزة خلال هذه الفترة.</div>` : `
     <table class="tasks-tbl">
@@ -2173,24 +2195,6 @@ function generatePeriodReport(start, end, deptId){
     </table>`}
   </section>
 
-  <section>
-    <h2>غيابات أعضاء هيئة التدريس (${absences.length})</h2>
-    ${absences.length === 0 ? `<div class="empty-note">لا توجد غيابات مسجّلة خلال هذه الفترة.</div>` : `
-    <table class="absences-tbl">
-      <thead><tr>${deptId ? '' : '<th>القسم</th>'}<th>عضو هيئة التدريس</th><th>المادة</th><th>التاريخ</th><th>الوقت</th><th>نوع الغياب</th></tr></thead>
-      <tbody>
-        ${absences.map(a=>`
-          <tr class="${a.absence_type === 'بعذر' ? 'row-excused' : 'row-unexcused'}">
-            ${deptId ? '' : `<td>${escapeHtml(deptName(a.department_id))}</td>`}
-            <td>${escapeHtml(a.faculty_name)}</td>
-            <td>${escapeHtml(a.course_name || '—')}</td>
-            <td>${a.absence_date || '—'}</td>
-            <td>${escapeHtml(a.absence_time || '—')}</td>
-            <td>${escapeHtml(a.absence_type || '—')}</td>
-          </tr>`).join('')}
-      </tbody>
-    </table>`}
-  </section>
 
   <div class="report-footer">
     <span>أُصدر بواسطة: ${escapeHtml(state.currentUser.full_name)}</span>
