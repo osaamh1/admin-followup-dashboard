@@ -2106,10 +2106,10 @@ function generatePeriodReport(start, end, deptId){
   </div>
 
   <div class="summary-strip">
-    <div class="summary-box"><div class="num">${completedTasks.length}</div><div class="lbl">مهمة منجزة</div></div>
-    <div class="summary-box"><div class="num">${approvedReports.length}</div><div class="lbl">تقرير أسبوعي معتمد</div></div>
-    <div class="summary-box"><div class="num">${absences.length}</div><div class="lbl">غياب مسجّل</div></div>
-    <div class="summary-box"><div class="num">${Object.keys(tasksByDept).length}</div><div class="lbl">قسم مشارك بالإنجاز</div></div>
+    <div class="summary-box"><div class="num">${absences.length}</div><div class="lbl">تقرير أسبوعي معتمد</div></div>
+    <div class="summary-box"><div class="num">${remoteRequests.length}</div><div class="lbl">طلبات تحويل المحاضرات</div></div>
+    <div class="summary-box"><div class="num">${completedTasks.length}</div><div class="lbl">مهام منجزة</div></div>
+    <div class="summary-box"><div class="num">${approvedReports.length}</div><div class="lbl">تقارير داعمة</div></div>
   </div>
 
   ${deptId ? '' : `
