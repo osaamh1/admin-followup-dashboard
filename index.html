@@ -255,6 +255,7 @@
   .modal h3{font-size:18px;color:var(--seal-dark);margin-bottom:16px;}
   .field{margin-bottom:14px;}
   .field label{display:block;font-size:13px;color:var(--ink-soft);margin-bottom:5px;}
+  .required-mark{color:var(--redd);font-weight:700;}
   .field input,.field textarea,.field select{
     width:100%;border:1px solid var(--line);border-radius:var(--radius);
     padding:8px 10px;font-size:14px;color:var(--ink);background:var(--paper);
@@ -1456,10 +1457,14 @@ function openAddRemoteModal(){
 function absenceTimeOptions(){
   const opts = [];
   for(let h=7; h<=24; h++){
-    const hour24 = h % 24;
-    const period = hour24 < 12 ? 'صباحًا' : 'مساءً';
-    let hour12 = hour24 % 12; if(hour12===0) hour12 = 12;
-    opts.push(`${hour12}:00 ${period}`);
+    for(let m=0; m<60; m+=15){
+      if(h===24 && m>0) break;
+      const hour24 = h % 24;
+      const period = hour24 < 12 ? 'صباحًا' : 'مساءً';
+      let hour12 = hour24 % 12; if(hour12===0) hour12 = 12;
+      const mm = String(m).padStart(2,'0');
+      opts.push(`${hour12}:${mm} ${period}`);
+    }
   }
   return opts;
 }
@@ -1483,7 +1488,7 @@ function absenceRowTemplate(idx){
       <div class="field"><label>نوع الغياب</label>
         <select class="absType"><option value="بعذر">بعذر</option><option value="بدون عذر">بدون عذر</option></select>
       </div>
-      <div class="field"><label>مستند الغياب (اختياري)</label><input type="file" class="absFile"></div>
+      <div class="field"><label>مستند الغياب <span class="required-mark">*</span></label><input type="file" class="absFile"></div>
     </div>`;
 }
 
@@ -1502,8 +1507,8 @@ function openAddAbsenceModal(){
         <select id="absDept">${state.departments.map(d=>`<option value="${d.id}">${d.name}</option>`).join('')}</select>
       </div>` : ''}
       <div id="absRowsContainer">${absenceRowTemplate(0)}</div>
+      <div class="field" style="margin-top:14px;"><label>مرئيات رئيس القسم بشأن التقرير <span class="required-mark">*</span></label><textarea id="absNotes"></textarea></div>
       <button type="button" class="btn-text" id="absAddRow">+ إضافة عضو آخر</button>
-      <div class="field" style="margin-top:14px;"><label>مرئيات رئيس القسم بشأن التقرير</label><textarea id="absNotes"></textarea></div>
       <p class="login-error hidden" id="absErr"></p>
       <div class="modal-actions">
         <button class="btn-ghost" id="absCancel">إلغاء</button>
@@ -1540,13 +1545,34 @@ function openAddAbsenceModal(){
       return;
     }
 
-    const sharedNotes = document.getElementById('absNotes').value || null;
+    const sharedNotes = document.getElementById('absNotes').value.trim();
+    if(!sharedNotes){
+      errEl.textContent = 'لازم تكتب مرئيات رئيس القسم بشأن التقرير قبل الحفظ.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+
     const rowEls = [...rowsContainer.querySelectorAll('.abs-row')];
+    const filledRows = rowEls.filter(rowEl => rowEl.querySelector('.absFaculty').value.trim());
+
+    if(filledRows.length === 0){
+      errEl.textContent = 'لازم تعبّي اسم عضو هيئة تدريس وحد على الأقل.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+
+    for(const rowEl of filledRows){
+      if(rowEl.querySelector('.absFile').files.length === 0){
+        errEl.textContent = 'مستند الغياب إلزامي لكل عضو مسجّل — ارفع الملف قبل الحفظ.';
+        errEl.classList.remove('hidden');
+        return;
+      }
+    }
+
     const entries = [];
 
-    for(const rowEl of rowEls){
+    for(const rowEl of filledRows){
       const facultyName = rowEl.querySelector('.absFaculty').value.trim();
-      if(!facultyName) continue;
 
       let documentPath = null;
       let documentName = null;
