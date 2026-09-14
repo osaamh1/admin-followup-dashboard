@@ -663,6 +663,7 @@ async function loadAll(){
   renderDeptChart();
   renderAbsences();
   renderRemoteRequests();
+  renderServicesArchive();
 }
 
 function flagOverdueLocally(){
@@ -758,6 +759,8 @@ function renderShell(){
       <details class="panel pending-requests-panel hidden" id="pendingRequestsPanel"></details>
 
       <details class="panel approved-reports-panel hidden" id="approvedReportsPanel"></details>
+
+      <details class="panel completed-panel" id="servicesArchivePanel"></details>
 
       <details class="panel completed-panel" id="completedPanel"></details>
     </div>
@@ -1122,9 +1125,10 @@ function renderAbsences(){
   const panel = document.getElementById('absencesPanel');
   const role = state.currentUser.role;
   const isFullEditor = EDITOR_ROLES.includes(role);
-  const list = role === 'department'
+  const scoped = role === 'department'
     ? state.absences.filter(a => a.department_id === state.currentUser.department_id)
     : state.absences;
+  const list = scoped.filter(a => a.status === 'قيد المراجعة' || !a.status);
 
   const decisionCell = (item, kind) => {
     if(item.status === 'مقبول') return `<span class="badge-inline badge-approved">✅ مقبول</span>`;
@@ -1201,13 +1205,67 @@ function renderAbsences(){
   });
 }
 
+function renderServicesArchive(){
+  const panel = document.getElementById('servicesArchivePanel');
+  const role = state.currentUser.role;
+
+  const scopedAbsences = role === 'department'
+    ? state.absences.filter(a => a.department_id === state.currentUser.department_id)
+    : state.absences;
+  const decidedAbsences = scopedAbsences.filter(a => a.status === 'مقبول' || a.status === 'مرفوض');
+
+  const scopedRemote = role === 'department'
+    ? state.remoteRequests.filter(r => r.department_id === state.currentUser.department_id)
+    : state.remoteRequests;
+  const decidedRemote = scopedRemote.filter(r => r.status === 'مقبول' || r.status === 'مرفوض');
+
+  const total = decidedAbsences.length + decidedRemote.length;
+
+  const badgeFor = (status) => status === 'مقبول'
+    ? `<span class="badge-inline badge-approved">✅ مقبول</span>`
+    : `<span class="badge-inline badge-rejected">❌ مرفوض</span>`;
+
+  const absenceItems = decidedAbsences.map(a => `
+    <li>
+      <div class="report-meta">
+        ${role === 'department' ? '' : `<span class="report-dept">${escapeHtml(deptName(a.department_id))}</span> — `}
+        ${escapeHtml(a.faculty_name)} — ${escapeHtml(a.course_name || '—')} — ${a.absence_date || '—'}
+        ${badgeFor(a.status)}
+      </div>
+      ${a.decision_note ? `<div class="rejection-note">${escapeHtml(a.decision_note)}</div>` : ''}
+    </li>`).join('');
+
+  const remoteItems = decidedRemote.map(r => `
+    <li>
+      <div class="report-meta">
+        ${role === 'department' ? '' : `<span class="report-dept">${escapeHtml(deptName(r.department_id))}</span> — `}
+        ${escapeHtml(r.faculty_name)} — ${escapeHtml(r.course_name || '—')} — ${r.lecture_date || '—'}
+        ${badgeFor(r.status)}
+      </div>
+      ${r.decision_note ? `<div class="rejection-note">${escapeHtml(r.decision_note)}</div>` : ''}
+    </li>`).join('');
+
+  panel.innerHTML = `
+    <summary>📋 التقارير الأسبوعية (${total})</summary>
+    <div class="panel-head"><h2 style="font-size:14px;">غيابات أعضاء هيئة التدريس</h2></div>
+    <ul class="report-list">
+      ${decidedAbsences.length === 0 ? `<li class="empty-note">لا توجد غيابات محسومة بعد.</li>` : absenceItems}
+    </ul>
+    <div class="panel-head"><h2 style="font-size:14px;">طلبات تحويل المحاضرات لعن بعد</h2></div>
+    <ul class="report-list">
+      ${decidedRemote.length === 0 ? `<li class="empty-note">لا توجد طلبات محسومة بعد.</li>` : remoteItems}
+    </ul>
+  `;
+}
+
 function renderRemoteRequests(){
   const panel = document.getElementById('remotePanel');
   const role = state.currentUser.role;
   const isFullEditor = EDITOR_ROLES.includes(role);
-  const list = role === 'department'
+  const scoped = role === 'department'
     ? state.remoteRequests.filter(r => r.department_id === state.currentUser.department_id)
     : state.remoteRequests;
+  const list = scoped.filter(r => r.status === 'قيد المراجعة' || !r.status);
 
   const decisionCell = (item, kind) => {
     if(item.status === 'مقبول') return `<span class="badge-inline badge-approved">✅ مقبول</span>`;
