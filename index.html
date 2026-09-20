@@ -399,7 +399,9 @@
     margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--line);
   }
   .record-card-title{font-weight:700;font-size:14.5px;color:var(--seal-dark);}
+  .record-card-title .rg-label{font-size:inherit;font-weight:400;color:var(--ink-soft);}
   .record-card-sub{font-weight:400;color:var(--ink-soft);font-size:13px;}
+  .record-card-sub .rg-label{font-size:inherit;}
   .record-card-dept{font-size:12px;color:var(--teal);font-weight:600;background:var(--teal-tint);padding:3px 10px;border-radius:20px;}
   .record-grid{
     display:grid;grid-template-columns:repeat(auto-fill, minmax(130px, 1fr));
@@ -1179,7 +1181,7 @@ function renderAbsences(){
   const cards = list.map(a => `
     <div class="record-card">
       <div class="record-card-head">
-        <div class="record-card-title">${escapeHtml(a.faculty_name)}${a.course_name ? ` <span class="record-card-sub">— ${escapeHtml(a.course_name)}</span>` : ''}</div>
+        <div class="record-card-title"><span class="rg-label">اسم العضو:</span> ${escapeHtml(a.faculty_name)}${a.course_name ? `<span class="record-card-sub">  <span class="rg-label">المادة:</span> ${escapeHtml(a.course_name)}</span>` : ''}</div>
         ${role === 'department' ? '' : `<span class="record-card-dept">${escapeHtml(deptName(a.department_id))}</span>`}
       </div>
       <div class="record-grid">
@@ -1251,7 +1253,7 @@ function renderRemoteRequests(){
   const cards = list.map(r => `
     <div class="record-card">
       <div class="record-card-head">
-        <div class="record-card-title">${escapeHtml(r.faculty_name)}${r.course_name ? ` <span class="record-card-sub">— ${escapeHtml(r.course_name)}</span>` : ''}</div>
+        <div class="record-card-title"><span class="rg-label">اسم العضو:</span> ${escapeHtml(r.faculty_name)}${r.course_name ? `<span class="record-card-sub">  <span class="rg-label">المادة:</span> ${escapeHtml(r.course_name)}</span>` : ''}</div>
         ${role === 'department' ? '' : `<span class="record-card-dept">${escapeHtml(deptName(r.department_id))}</span>`}
       </div>
       <div class="record-grid">
@@ -2168,6 +2170,24 @@ function generatePeriodReport(start, end, deptId){
     font-size:13px;font-weight:700;
   }
   .empty-note{color:var(--ink-soft);font-size:14px;text-align:center;padding:20px;background:var(--paper);border-radius:6px;}
+  .dept-drilldown{
+    border:1px solid var(--line);border-radius:8px;margin-bottom:10px;overflow:hidden;
+  }
+  .dept-drilldown summary{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:14px 18px;cursor:pointer;background:var(--teal-tint);
+    font-family:'Noto Kufi Arabic',sans-serif;font-weight:700;color:var(--seal-dark);font-size:15px;
+    list-style:none;
+  }
+  .dept-drilldown summary::-webkit-details-marker{display:none;}
+  .dept-drilldown summary::after{content:'▾';font-size:14px;color:var(--ink-soft);}
+  .dept-drilldown[open] summary::after{content:'▴';}
+  .dept-drilldown-count{
+    font-family:'IBM Plex Sans Arabic',sans-serif;font-weight:600;font-size:13px;
+    color:var(--teal);background:#fff;padding:2px 12px;border-radius:20px;
+  }
+  .dept-drilldown table{margin:0;}
+  .dept-drilldown th{border-radius:0;}
   .report-footer{
     margin-top:36px;padding-top:16px;border-top:2px solid var(--line);
     font-size:12px;color:var(--ink-soft);display:flex;justify-content:space-between;
@@ -2223,40 +2243,90 @@ function generatePeriodReport(start, end, deptId){
 
   <section>
     <h2>تقرير القسم الأسبوعي (${absences.length})</h2>
-    ${absences.length === 0 ? `<div class="empty-note">لا توجد غيابات مسجّلة خلال هذه الفترة.</div>` : `
-    <table class="absences-tbl">
-      <thead><tr>${deptId ? '' : '<th>القسم</th>'}<th>عضو هيئة التدريس</th><th>المادة</th><th>التاريخ</th><th>الوقت</th><th>نوع الغياب</th></tr></thead>
-      <tbody>
-        ${absences.map(a=>`
-          <tr class="${a.absence_type === 'بعذر' ? 'row-excused' : 'row-unexcused'}">
-            ${deptId ? '' : `<td>${escapeHtml(deptName(a.department_id))}</td>`}
-            <td>${escapeHtml(a.faculty_name)}</td>
-            <td>${escapeHtml(a.course_name || '—')}</td>
-            <td>${a.absence_date || '—'}</td>
-            <td>${escapeHtml(a.absence_time || '—')}</td>
-            <td>${escapeHtml(a.absence_type || '—')}</td>
-          </tr>`).join('')}
-      </tbody>
-    </table>`}
+    ${absences.length === 0 ? `<div class="empty-note">لا توجد غيابات مسجّلة خلال هذه الفترة.</div>` : (
+      deptId ? `
+      <table class="absences-tbl">
+        <thead><tr><th>عضو هيئة التدريس</th><th>المادة</th><th>التاريخ</th><th>الوقت</th><th>نوع الغياب</th></tr></thead>
+        <tbody>
+          ${absences.map(a=>`
+            <tr class="${a.absence_type === 'بعذر' ? 'row-excused' : 'row-unexcused'}">
+              <td>${escapeHtml(a.faculty_name)}</td>
+              <td>${escapeHtml(a.course_name || '—')}</td>
+              <td>${a.absence_date || '—'}</td>
+              <td>${escapeHtml(a.absence_time || '—')}</td>
+              <td>${escapeHtml(a.absence_type || '—')}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>` : (()=>{
+        const byDept = {};
+        absences.forEach(a=>{
+          const key = a.department_id;
+          if(!byDept[key]) byDept[key] = [];
+          byDept[key].push(a);
+        });
+        return Object.entries(byDept).map(([dId, items])=>`
+          <details class="dept-drilldown">
+            <summary><span>${escapeHtml(deptName(dId))}</span><span class="dept-drilldown-count">${items.length} تقرير</span></summary>
+            <table class="absences-tbl">
+              <thead><tr><th>عضو هيئة التدريس</th><th>المادة</th><th>التاريخ</th><th>الوقت</th><th>نوع الغياب</th></tr></thead>
+              <tbody>
+                ${items.map(a=>`
+                  <tr class="${a.absence_type === 'بعذر' ? 'row-excused' : 'row-unexcused'}">
+                    <td>${escapeHtml(a.faculty_name)}</td>
+                    <td>${escapeHtml(a.course_name || '—')}</td>
+                    <td>${a.absence_date || '—'}</td>
+                    <td>${escapeHtml(a.absence_time || '—')}</td>
+                    <td>${escapeHtml(a.absence_type || '—')}</td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </details>`).join('');
+      })()
+    )}
   </section>
 
   <section>
     <h2>طلبات تحويل المحاضرات (${remoteRequests.length})</h2>
-    ${remoteRequests.length === 0 ? `<div class="empty-note">لا توجد طلبات تحويل خلال هذه الفترة.</div>` : `
-    <table class="reports-tbl">
-      <thead><tr>${deptId ? '' : '<th>القسم</th>'}<th>عضو هيئة التدريس</th><th>المادة</th><th>التاريخ</th><th>الوقت</th><th>القرار</th></tr></thead>
-      <tbody>
-        ${remoteRequests.map(r=>`
-          <tr>
-            ${deptId ? '' : `<td>${escapeHtml(deptName(r.department_id))}</td>`}
-            <td>${escapeHtml(r.faculty_name)}</td>
-            <td>${escapeHtml(r.course_name || '—')}</td>
-            <td>${r.lecture_date || '—'}</td>
-            <td>${escapeHtml(r.lecture_time || '—')}</td>
-            <td>${escapeHtml(r.status || 'قيد المراجعة')}</td>
-          </tr>`).join('')}
-      </tbody>
-    </table>`}
+    ${remoteRequests.length === 0 ? `<div class="empty-note">لا توجد طلبات تحويل خلال هذه الفترة.</div>` : (
+      deptId ? `
+      <table class="reports-tbl">
+        <thead><tr><th>عضو هيئة التدريس</th><th>المادة</th><th>التاريخ</th><th>الوقت</th><th>القرار</th></tr></thead>
+        <tbody>
+          ${remoteRequests.map(r=>`
+            <tr>
+              <td>${escapeHtml(r.faculty_name)}</td>
+              <td>${escapeHtml(r.course_name || '—')}</td>
+              <td>${r.lecture_date || '—'}</td>
+              <td>${escapeHtml(r.lecture_time || '—')}</td>
+              <td>${escapeHtml(r.status || 'قيد المراجعة')}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>` : (()=>{
+        const byDept = {};
+        remoteRequests.forEach(r=>{
+          const key = r.department_id;
+          if(!byDept[key]) byDept[key] = [];
+          byDept[key].push(r);
+        });
+        return Object.entries(byDept).map(([dId, items])=>`
+          <details class="dept-drilldown">
+            <summary><span>${escapeHtml(deptName(dId))}</span><span class="dept-drilldown-count">${items.length} طلب</span></summary>
+            <table class="reports-tbl">
+              <thead><tr><th>عضو هيئة التدريس</th><th>المادة</th><th>التاريخ</th><th>الوقت</th><th>القرار</th></tr></thead>
+              <tbody>
+                ${items.map(r=>`
+                  <tr>
+                    <td>${escapeHtml(r.faculty_name)}</td>
+                    <td>${escapeHtml(r.course_name || '—')}</td>
+                    <td>${r.lecture_date || '—'}</td>
+                    <td>${escapeHtml(r.lecture_time || '—')}</td>
+                    <td>${escapeHtml(r.status || 'قيد المراجعة')}</td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </details>`).join('');
+      })()
+    )}
   </section>
 
   <section>
