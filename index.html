@@ -380,8 +380,11 @@
 
   /* ===== الرسم البياني لإنجاز الأقسام ===== */
   .dept-chart-panel{margin-bottom:22px;}
-  .absences-panel{margin-bottom:22px;padding:0;overflow-x:auto;}
-  .remote-panel{margin-bottom:22px;overflow-x:auto;}
+  .absences-panel, .remote-panel{
+    margin-bottom:22px;overflow-x:auto;box-sizing:border-box;
+    width:100vw;margin-left:calc(-50vw + 50%);margin-right:calc(-50vw + 50%);
+    padding:0 18px;
+  }
   .remote-panel summary{
     padding:14px 18px;font-family:'Noto Kufi Arabic',sans-serif;font-size:17px;
     color:var(--seal-dark);cursor:pointer;
