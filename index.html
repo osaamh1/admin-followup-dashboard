@@ -384,18 +384,33 @@
 
   /* ===== الرسم البياني لإنجاز الأقسام ===== */
   .dept-chart-panel{margin-bottom:22px;}
-  .absences-panel, .remote-panel{
-    margin-bottom:22px;overflow-x:auto;box-sizing:border-box;
-    width:100vw;margin-left:calc(-50vw + 50%);margin-right:calc(-50vw + 50%);
-    padding:0 18px;
-  }
+  .absences-panel, .remote-panel{margin-bottom:22px;}
   .remote-panel summary{
     padding:14px 18px;font-family:'Noto Kufi Arabic',sans-serif;font-size:17px;
     color:var(--seal-dark);cursor:pointer;
   }
-  .absences-table{font-size:13px;}
-  .absences-table tbody tr:nth-child(even){background:var(--paper);}
-  .absences-table tbody tr:nth-child(odd){background:#fff;}
+  .record-list{padding:16px 18px;display:flex;flex-direction:column;gap:14px;}
+  .record-card{
+    border:1px solid var(--line);border-radius:var(--radius);
+    padding:14px 16px;background:#fff;
+  }
+  .record-card-head{
+    display:flex;justify-content:space-between;align-items:baseline;
+    margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--line);
+  }
+  .record-card-title{font-weight:700;font-size:14.5px;color:var(--seal-dark);}
+  .record-card-sub{font-weight:400;color:var(--ink-soft);font-size:13px;}
+  .record-card-dept{font-size:12px;color:var(--teal);font-weight:600;background:var(--teal-tint);padding:3px 10px;border-radius:20px;}
+  .record-grid{
+    display:grid;grid-template-columns:repeat(auto-fill, minmax(130px, 1fr));
+    gap:10px 16px;margin-bottom:10px;
+  }
+  .record-grid > div{display:flex;flex-direction:column;gap:2px;}
+  .rg-label{font-size:11px;color:var(--ink-soft);}
+  .rg-value{font-size:13px;color:var(--ink);}
+  .record-card-notes{font-size:13px;color:var(--ink);margin-bottom:8px;line-height:1.6;}
+  .record-card-notes .rg-label{display:inline;font-weight:700;color:var(--ink-soft);}
+  .record-card-decision{padding-top:8px;border-top:1px solid var(--line);}
   .absences-table th, .absences-table td{white-space:nowrap;}
   .dept-chart{padding:18px;display:flex;flex-direction:column;gap:14px;}
   .chart-row{display:flex;align-items:center;gap:12px;}
@@ -1154,27 +1169,30 @@ function renderAbsences(){
     : state.absences;
   const list = scoped.filter(a => a.status === 'قيد المراجعة' || !a.status || isWithinGracePeriod(a.decided_at));
 
-  const decisionCell = (item, kind) => {
+  const decisionBlock = (item, kind) => {
     if(item.status === 'مقبول') return `<span class="badge-inline badge-approved">✅ مقبول</span>`;
     if(item.status === 'مرفوض') return `<span class="badge-inline badge-rejected">❌ مرفوض</span>${item.decision_note ? `<div class="rejection-note">${escapeHtml(item.decision_note)}</div>` : ''}`;
-    if(isFullEditor) return `<div class="decision-actions"><button class="decide-btn" data-id="${item.id}" data-kind="${kind}" data-action="مقبول">✅</button><button class="reject-btn" data-id="${item.id}" data-kind="${kind}">❌</button></div>`;
+    if(isFullEditor) return `<div class="decision-actions"><button class="decide-btn" data-id="${item.id}" data-kind="${kind}" data-action="مقبول">✅ قبول</button><button class="reject-btn" data-id="${item.id}" data-kind="${kind}">❌ رفض</button></div>`;
     return `<span class="badge-inline badge-pending">📋 قيد المراجعة</span>`;
   };
 
-  const rows = list.map(a => `
-    <tr>
-      <td>${escapeHtml(a.faculty_name)}</td>
-      ${role === 'department' ? '' : `<td>${escapeHtml(deptName(a.department_id))}</td>`}
-      <td>${escapeHtml(a.course_name || '—')}</td>
-      <td>${escapeHtml(a.section_number || '—')}</td>
-      <td>${a.absence_date || '—'}</td>
-      <td>${escapeHtml(a.absence_time || '—')}</td>
-      <td>${escapeHtml(a.room || '—')}</td>
-      <td><span class="badge ${a.absence_type === 'بعذر' ? 'st-جارية' : 'st-متعثرة'}">${escapeHtml(a.absence_type || '—')}</span></td>
-      <td>${a.document_path ? `<a href="#" id="absdoc-${a.id}" class="attach-link">📎 ${escapeHtml(a.document_name || 'المستند')}</a>` : '—'}</td>
-      <td>${escapeHtml(a.head_notes || '—')}</td>
-      <td>${decisionCell(a, 'absence')}</td>
-    </tr>
+  const cards = list.map(a => `
+    <div class="record-card">
+      <div class="record-card-head">
+        <div class="record-card-title">${escapeHtml(a.faculty_name)}${a.course_name ? ` <span class="record-card-sub">— ${escapeHtml(a.course_name)}</span>` : ''}</div>
+        ${role === 'department' ? '' : `<span class="record-card-dept">${escapeHtml(deptName(a.department_id))}</span>`}
+      </div>
+      <div class="record-grid">
+        <div><span class="rg-label">رقم الشعبة</span><span class="rg-value">${escapeHtml(a.section_number || '—')}</span></div>
+        <div><span class="rg-label">تاريخ الغياب</span><span class="rg-value">${a.absence_date || '—'}</span></div>
+        <div><span class="rg-label">الوقت</span><span class="rg-value">${escapeHtml(a.absence_time || '—')}</span></div>
+        <div><span class="rg-label">القاعة</span><span class="rg-value">${escapeHtml(a.room || '—')}</span></div>
+        <div><span class="rg-label">نوع الغياب</span><span class="rg-value"><span class="badge ${a.absence_type === 'بعذر' ? 'st-جارية' : 'st-متعثرة'}">${escapeHtml(a.absence_type || '—')}</span></span></div>
+        <div><span class="rg-label">المستند</span><span class="rg-value">${a.document_path ? `<a href="#" id="absdoc-${a.id}" class="attach-link">📎 ${escapeHtml(a.document_name || 'المستند')}</a>` : '—'}</span></div>
+      </div>
+      <div class="record-card-notes"><span class="rg-label">مرئيات رئيس القسم</span> ${escapeHtml(a.head_notes || '—')}</div>
+      <div class="record-card-decision">${decisionBlock(a, 'absence')}</div>
+    </div>
   `).join('');
 
   panel.innerHTML = `
@@ -1182,26 +1200,9 @@ function renderAbsences(){
       <h2>📆 تقرير القسم الأسبوعي</h2>
       <button class="btn-primary" id="addAbsenceBtn">+ رفع التقرير</button>
     </div>
-    <table class="tasks-table absences-table">
-      <thead>
-        <tr>
-          <th>عضو هيئة التدريس</th>
-          ${role === 'department' ? '' : '<th>القسم</th>'}
-          <th>اسم المادة</th>
-          <th>رقم الشعبة</th>
-          <th>تاريخ الغياب</th>
-          <th>الوقت</th>
-          <th>القاعة</th>
-          <th>نوع الغياب</th>
-          <th>المستند</th>
-          <th>مرئيات رئيس القسم</th>
-          <th>القرار</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${list.length === 0 ? `<tr class="empty-row"><td colspan="${role==='department'?10:11}">لا توجد غيابات مسجّلة بعد.</td></tr>` : rows}
-      </tbody>
-    </table>
+    <div class="record-list">
+      ${list.length === 0 ? `<div class="empty-note">لا توجد غيابات مسجّلة بعد.</div>` : cards}
+    </div>
   `;
 
   document.getElementById('addAbsenceBtn').onclick = openAddAbsenceModal;
@@ -1229,35 +1230,66 @@ function renderAbsences(){
   });
 }
 
-function renderRemoteArchive(){
-  const panel = document.getElementById('remoteArchivePanel');
-  const role = state.currentUser.role;
 
-  const scopedRemote = role === 'department'
+
+function renderRemoteRequests(){
+  const panel = document.getElementById('remotePanel');
+  const role = state.currentUser.role;
+  const isFullEditor = EDITOR_ROLES.includes(role);
+  const scoped = role === 'department'
     ? state.remoteRequests.filter(r => r.department_id === state.currentUser.department_id)
     : state.remoteRequests;
-  const decidedRemote = scopedRemote.filter(r => (r.status === 'مقبول' || r.status === 'مرفوض') && !isWithinGracePeriod(r.decided_at));
+  const list = scoped.filter(r => r.status === 'قيد المراجعة' || !r.status || isWithinGracePeriod(r.decided_at));
 
-  const badgeFor = (status) => status === 'مقبول'
-    ? `<span class="badge-inline badge-approved">✅ مقبول</span>`
-    : `<span class="badge-inline badge-rejected">❌ مرفوض</span>`;
+  const decisionBlock = (item, kind) => {
+    if(item.status === 'مقبول') return `<span class="badge-inline badge-approved">✅ مقبول</span>`;
+    if(item.status === 'مرفوض') return `<span class="badge-inline badge-rejected">❌ مرفوض</span>${item.decision_note ? `<div class="rejection-note">${escapeHtml(item.decision_note)}</div>` : ''}`;
+    if(isFullEditor) return `<div class="decision-actions"><button class="decide-btn" data-id="${item.id}" data-kind="${kind}" data-action="مقبول">✅ قبول</button><button class="reject-btn" data-id="${item.id}" data-kind="${kind}">❌ رفض</button></div>`;
+    return `<span class="badge-inline badge-pending">📋 قيد المراجعة</span>`;
+  };
 
-  const remoteItems = decidedRemote.map(r => `
-    <li>
-      <div class="report-meta">
-        ${role === 'department' ? '' : `<span class="report-dept">${escapeHtml(deptName(r.department_id))}</span> — `}
-        ${escapeHtml(r.faculty_name)} — ${escapeHtml(r.course_name || '—')} — ${r.lecture_date || '—'}
-        ${badgeFor(r.status)}
+  const cards = list.map(r => `
+    <div class="record-card">
+      <div class="record-card-head">
+        <div class="record-card-title">${escapeHtml(r.faculty_name)}${r.course_name ? ` <span class="record-card-sub">— ${escapeHtml(r.course_name)}</span>` : ''}</div>
+        ${role === 'department' ? '' : `<span class="record-card-dept">${escapeHtml(deptName(r.department_id))}</span>`}
       </div>
-      ${r.decision_note ? `<div class="rejection-note">${escapeHtml(r.decision_note)}</div>` : ''}
-    </li>`).join('');
+      <div class="record-grid">
+        <div><span class="rg-label">تاريخ المحاضرة</span><span class="rg-value">${r.lecture_date || '—'}</span></div>
+        <div><span class="rg-label">الوقت</span><span class="rg-value">${escapeHtml(r.lecture_time || '—')}</span></div>
+      </div>
+      <div class="record-card-notes"><span class="rg-label">مسوغات الطلب</span> ${escapeHtml(r.justification || '—')}</div>
+      <div class="record-card-notes"><span class="rg-label">مرئيات رئيس القسم</span> ${escapeHtml(r.head_notes || '—')}</div>
+      <div class="record-card-decision">${decisionBlock(r, 'remote')}</div>
+    </div>
+  `).join('');
 
   panel.innerHTML = `
-    <summary>📡 طلبات تحويل المحاضرات (${decidedRemote.length})</summary>
-    <ul class="report-list">
-      ${decidedRemote.length === 0 ? `<li class="empty-note">لا توجد طلبات محسومة بعد.</li>` : remoteItems}
-    </ul>
+    <div class="panel-head">
+      <h2>📡 طلب تحويل محاضرة حضورية إلى عن بعد</h2>
+      <button class="btn-primary" id="addRemoteBtn">+ تسجيل طلب</button>
+    </div>
+    <div class="record-list">
+      ${list.length === 0 ? `<div class="empty-note">لا توجد طلبات مسجّلة بعد.</div>` : cards}
+    </div>
   `;
+
+  document.getElementById('addRemoteBtn').onclick = openAddRemoteModal;
+
+  panel.querySelectorAll('.decide-btn[data-kind="remote"]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      await sb.from('remote_lecture_requests').update({ status: 'مقبول', decided_at: new Date().toISOString() }).eq('id', btn.dataset.id);
+      await loadAll();
+    };
+  });
+  panel.querySelectorAll('.reject-btn[data-kind="remote"]').forEach(btn=>{
+    btn.onclick = ()=>{
+      promptRejectionNote('رفض طلب التحويل لعن بعد', async (note)=>{
+        await sb.from('remote_lecture_requests').update({ status: 'مرفوض', decision_note: note, decided_at: new Date().toISOString() }).eq('id', btn.dataset.id);
+        await loadAll();
+      });
+    };
+  });
 }
 
 function renderServicesArchive(){
@@ -1291,75 +1323,35 @@ function renderServicesArchive(){
   `;
 }
 
-function renderRemoteRequests(){
-  const panel = document.getElementById('remotePanel');
+function renderRemoteArchive(){
+  const panel = document.getElementById('remoteArchivePanel');
   const role = state.currentUser.role;
-  const isFullEditor = EDITOR_ROLES.includes(role);
-  const scoped = role === 'department'
+
+  const scopedRemote = role === 'department'
     ? state.remoteRequests.filter(r => r.department_id === state.currentUser.department_id)
     : state.remoteRequests;
-  const list = scoped.filter(r => r.status === 'قيد المراجعة' || !r.status || isWithinGracePeriod(r.decided_at));
+  const decidedRemote = scopedRemote.filter(r => (r.status === 'مقبول' || r.status === 'مرفوض') && !isWithinGracePeriod(r.decided_at));
 
-  const decisionCell = (item, kind) => {
-    if(item.status === 'مقبول') return `<span class="badge-inline badge-approved">✅ مقبول</span>`;
-    if(item.status === 'مرفوض') return `<span class="badge-inline badge-rejected">❌ مرفوض</span>${item.decision_note ? `<div class="rejection-note">${escapeHtml(item.decision_note)}</div>` : ''}`;
-    if(isFullEditor) return `<div class="decision-actions"><button class="decide-btn" data-id="${item.id}" data-kind="${kind}" data-action="مقبول">✅</button><button class="reject-btn" data-id="${item.id}" data-kind="${kind}">❌</button></div>`;
-    return `<span class="badge-inline badge-pending">📋 قيد المراجعة</span>`;
-  };
+  const badgeFor = (status) => status === 'مقبول'
+    ? `<span class="badge-inline badge-approved">✅ مقبول</span>`
+    : `<span class="badge-inline badge-rejected">❌ مرفوض</span>`;
 
-  const rows = list.map(r => `
-    <tr>
-      <td>${escapeHtml(r.faculty_name)}</td>
-      ${role === 'department' ? '' : `<td>${escapeHtml(deptName(r.department_id))}</td>`}
-      <td>${escapeHtml(r.course_name || '—')}</td>
-      <td>${r.lecture_date || '—'}</td>
-      <td>${escapeHtml(r.lecture_time || '—')}</td>
-      <td>${escapeHtml(r.justification || '—')}</td>
-      <td>${escapeHtml(r.head_notes || '—')}</td>
-      <td>${decisionCell(r, 'remote')}</td>
-    </tr>
-  `).join('');
+  const remoteItems = decidedRemote.map(r => `
+    <li>
+      <div class="report-meta">
+        ${role === 'department' ? '' : `<span class="report-dept">${escapeHtml(deptName(r.department_id))}</span> — `}
+        ${escapeHtml(r.faculty_name)} — ${escapeHtml(r.course_name || '—')} — ${r.lecture_date || '—'}
+        ${badgeFor(r.status)}
+      </div>
+      ${r.decision_note ? `<div class="rejection-note">${escapeHtml(r.decision_note)}</div>` : ''}
+    </li>`).join('');
 
   panel.innerHTML = `
-    <div class="panel-head">
-      <h2>📡 طلب تحويل محاضرة حضورية إلى عن بعد</h2>
-      <button class="btn-primary" id="addRemoteBtn">+ تسجيل طلب</button>
-    </div>
-    <table class="tasks-table absences-table">
-      <thead>
-        <tr>
-          <th>عضو هيئة التدريس</th>
-          ${role === 'department' ? '' : '<th>القسم</th>'}
-          <th>اسم المادة</th>
-          <th>التاريخ</th>
-          <th>الوقت</th>
-          <th>مسوغات الطلب</th>
-          <th>مرئيات رئيس القسم</th>
-          <th>القرار</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${list.length === 0 ? `<tr class="empty-row"><td colspan="${role==='department'?7:8}">لا توجد طلبات مسجّلة بعد.</td></tr>` : rows}
-      </tbody>
-    </table>
+    <summary>📡 طلبات تحويل المحاضرات (${decidedRemote.length})</summary>
+    <ul class="report-list">
+      ${decidedRemote.length === 0 ? `<li class="empty-note">لا توجد طلبات محسومة بعد.</li>` : remoteItems}
+    </ul>
   `;
-
-  document.getElementById('addRemoteBtn').onclick = openAddRemoteModal;
-
-  panel.querySelectorAll('.decide-btn[data-kind="remote"]').forEach(btn=>{
-    btn.onclick = async ()=>{
-      await sb.from('remote_lecture_requests').update({ status: 'مقبول', decided_at: new Date().toISOString() }).eq('id', btn.dataset.id);
-      await loadAll();
-    };
-  });
-  panel.querySelectorAll('.reject-btn[data-kind="remote"]').forEach(btn=>{
-    btn.onclick = ()=>{
-      promptRejectionNote('رفض طلب التحويل لعن بعد', async (note)=>{
-        await sb.from('remote_lecture_requests').update({ status: 'مرفوض', decision_note: note, decided_at: new Date().toISOString() }).eq('id', btn.dataset.id);
-        await loadAll();
-      });
-    };
-  });
 }
 
 function remoteRowTemplate(idx){
