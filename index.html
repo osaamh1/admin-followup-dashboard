@@ -542,7 +542,7 @@ function renderLoginScreen(errorMsg){
 
   document.getElementById('forgotBtn').onclick = ()=>{
     const errEl = document.getElementById('loginErr');
-    errEl.innerHTML = 'نسيت كلمة المرور؟ راسل مشرف النظام على: <a href="mailto:o.aldukhail@qu.edu.sa">o.aldukhail@qu.edu.sa</a>';
+    errEl.innerHTML = 'نسيت كلمة المرور؟ راسل مشرف النظام على: <a href="mailto:sirfa100@outlook.com">sirfa100@outlook.com</a><br>تحويلة رقم: 18883';
     errEl.classList.remove('hidden');
   };
 }
@@ -1517,7 +1517,7 @@ function absenceRowTemplate(idx){
       <div class="field"><label>نوع الغياب</label>
         <select class="absType"><option value="بعذر">بعذر</option><option value="بدون عذر">بدون عذر</option></select>
       </div>
-      <div class="field"><label>مستند الغياب <span class="required-mark">*</span></label><input type="file" class="absFile"></div>
+      <div class="field"><label>مستند الغياب <span class="required-mark">(إلزامي في حال "بعذر")</span></label><input type="file" class="absFile"></div>
     </div>`;
 }
 
@@ -1591,8 +1591,9 @@ function openAddAbsenceModal(){
     }
 
     for(const rowEl of filledRows){
-      if(rowEl.querySelector('.absFile').files.length === 0){
-        errEl.textContent = 'مستند الغياب إلزامي لكل عضو مسجّل — ارفع الملف قبل الحفظ.';
+      const absType = rowEl.querySelector('.absType').value;
+      if(absType === 'بعذر' && rowEl.querySelector('.absFile').files.length === 0){
+        errEl.textContent = 'مستند الغياب إلزامي لحالة "بعذر" — ارفع ملف العذر قبل الحفظ.';
         errEl.classList.remove('hidden');
         return;
       }
