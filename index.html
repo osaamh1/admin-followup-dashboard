@@ -1109,8 +1109,16 @@ function renderDecisions(){
       <div class="dec-title">${escapeHtml(d.title)}</div>
       <div class="dec-date">${d.decision_date || ''}</div>
       ${d.description ? `<div class="dec-desc">${escapeHtml(d.description)}</div>` : ''}
+      ${d.attachment_path ? `<a href="#" id="decdoc-${d.id}" class="attach-link">📎 ${escapeHtml(d.attachment_name || 'تحميل المرفق')}</a>` : ''}
     </li>
   `).join('');
+
+  state.decisions.filter(d => d.attachment_path).forEach(async (d)=>{
+    const el = document.getElementById(`decdoc-${d.id}`);
+    if(!el) return;
+    const { data, error } = await sb.storage.from('decision-attachments').createSignedUrl(d.attachment_path, 3600);
+    if(!error && data){ el.href = data.signedUrl; el.target = '_blank'; }
+  });
 }
 
 function getWeekStartISO(d = new Date()){
@@ -2036,6 +2044,7 @@ function openAddDecisionModal(){
       <div class="field"><label>عنوان القرار</label><input id="dTitle" type="text"></div>
       <div class="field"><label>تاريخ القرار</label><input id="dDate" type="date"></div>
       <div class="field"><label>الوصف</label><textarea id="dDesc"></textarea></div>
+      <div class="field"><label>إرفاق ملف القرار (اختياري)</label><input type="file" id="dFile"></div>
       <div class="modal-actions">
         <button class="btn-ghost" id="dCancel">إلغاء</button>
         <button class="btn-primary" id="dSave">حفظ القرار</button>
@@ -2045,10 +2054,23 @@ function openAddDecisionModal(){
   document.getElementById('dSave').onclick = async ()=>{
     const title = document.getElementById('dTitle').value.trim();
     if(!title) return;
+
+    let attachmentPath = null;
+    let attachmentName = null;
+    const fileInput = document.getElementById('dFile');
+    if(fileInput.files.length > 0){
+      const file = fileInput.files[0];
+      const path = `${Date.now()}_${sanitizeFileName(file.name)}`;
+      const { error: uploadError } = await sb.storage.from('decision-attachments').upload(path, file);
+      if(!uploadError){ attachmentPath = path; attachmentName = file.name; }
+    }
+
     await sb.from('decisions').insert({
       title,
       decision_date: document.getElementById('dDate').value || null,
-      description: document.getElementById('dDesc').value || null
+      description: document.getElementById('dDesc').value || null,
+      attachment_path: attachmentPath,
+      attachment_name: attachmentName
     });
     closeModal();
     await loadAll();
