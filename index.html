@@ -430,13 +430,13 @@
   .dept-group-body{display:none;padding:14px 16px;flex-direction:column;gap:14px;border-top:1px solid var(--line);}
   .dept-group.open .dept-group-body{display:flex;}
   .pulse-dot{
-    width:9px;height:9px;border-radius:50%;background:var(--redd);flex-shrink:0;
-    box-shadow:0 0 0 0 rgba(200,50,50,.6);
-    animation:pulseDot 1.6s infinite;
+    width:13px;height:13px;border-radius:50%;background:var(--redd);flex-shrink:0;
+    box-shadow:0 0 0 0 rgba(200,50,50,.7);
+    animation:pulseDot .9s infinite;
   }
   @keyframes pulseDot{
-    0%{box-shadow:0 0 0 0 rgba(200,50,50,.55);}
-    70%{box-shadow:0 0 0 8px rgba(200,50,50,0);}
+    0%{box-shadow:0 0 0 0 rgba(200,50,50,.65);}
+    70%{box-shadow:0 0 0 10px rgba(200,50,50,0);}
     100%{box-shadow:0 0 0 0 rgba(200,50,50,0);}
   }
   .dept-chart{padding:18px;display:flex;flex-direction:column;gap:14px;}
@@ -1201,6 +1201,8 @@ function isPendingItem(item){
   return item.status === 'قيد المراجعة' || !item.status;
 }
 
+const DEPT_ACCORDION_NOUN = { absence: 'تقارير', remote: 'طلبات' };
+
 function buildDeptAccordionHtml(kind, list, cardHtmlFn){
   const groups = new Map();
   list.forEach(item=>{
@@ -1213,12 +1215,17 @@ function buildDeptAccordionHtml(kind, list, cardHtmlFn){
   if(groups.has('__none__')) orderedDeptIds.push('__none__');
 
   const openSet = state.openDeptGroups[kind];
+  const noun = DEPT_ACCORDION_NOUN[kind] || 'عناصر';
 
   return orderedDeptIds.map(deptId=>{
     const items = groups.get(deptId);
-    const hasPending = items.some(isPendingItem);
+    const pendingCount = items.filter(isPendingItem).length;
+    const hasPending = pendingCount > 0;
     const isOpen = openSet.has(deptId);
     const name = deptId === '__none__' ? 'بدون قسم' : deptName(deptId);
+    const countLabel = hasPending
+      ? `${pendingCount} ${noun} قيد الانتظار`
+      : `${items.length}`;
     return `
       <div class="dept-group ${isOpen ? 'open' : ''}" data-dept-id="${deptId}">
         <div class="dept-group-head" data-kind="${kind}" data-dept-id="${deptId}">
@@ -1227,7 +1234,7 @@ function buildDeptAccordionHtml(kind, list, cardHtmlFn){
             <span>${escapeHtml(name)}</span>
           </div>
           <div style="display:flex;align-items:center;gap:10px;">
-            <span class="dept-group-count">${items.length}</span>
+            <span class="dept-group-count">${countLabel}</span>
             <span class="dept-group-toggle">▾</span>
           </div>
         </div>
