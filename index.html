@@ -414,6 +414,31 @@
   .record-card-notes .rg-label{display:inline;font-weight:700;color:var(--ink-soft);}
   .record-card-decision{padding-top:8px;border-top:1px solid var(--line);}
   .absences-table th, .absences-table td{white-space:nowrap;}
+
+  /* ===== قائمة الأقسام المنسدلة (Accordion) ===== */
+  .dept-accordion{padding:14px 18px;display:flex;flex-direction:column;gap:10px;}
+  .dept-group{border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:#fff;}
+  .dept-group-head{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:13px 16px;cursor:pointer;user-select:none;background:var(--paper-raised);
+  }
+  .dept-group-head:hover{background:var(--paper);}
+  .dept-group-title{display:flex;align-items:center;gap:9px;font-weight:700;font-size:14.5px;color:var(--seal-dark);}
+  .dept-group-count{font-size:12px;font-weight:600;color:var(--ink-soft);background:var(--paper);border:1px solid var(--line);padding:2px 10px;border-radius:20px;}
+  .dept-group-toggle{font-size:12px;color:var(--ink-soft);transition:transform .2s ease;}
+  .dept-group.open .dept-group-toggle{transform:rotate(180deg);}
+  .dept-group-body{display:none;padding:14px 16px;flex-direction:column;gap:14px;border-top:1px solid var(--line);}
+  .dept-group.open .dept-group-body{display:flex;}
+  .pulse-dot{
+    width:9px;height:9px;border-radius:50%;background:var(--redd);flex-shrink:0;
+    box-shadow:0 0 0 0 rgba(200,50,50,.6);
+    animation:pulseDot 1.6s infinite;
+  }
+  @keyframes pulseDot{
+    0%{box-shadow:0 0 0 0 rgba(200,50,50,.55);}
+    70%{box-shadow:0 0 0 8px rgba(200,50,50,0);}
+    100%{box-shadow:0 0 0 0 rgba(200,50,50,0);}
+  }
   .dept-chart{padding:18px;display:flex;flex-direction:column;gap:14px;}
   .chart-row{display:flex;align-items:center;gap:12px;}
   .chart-label{width:190px;flex-shrink:0;font-size:13px;color:var(--ink);font-weight:600;}
@@ -461,7 +486,7 @@ let inactivityTimer = null;
 let inactivityWatcherStarted = false;
 
 let sb = null;
-let state = { tasks:[], decisions:[], departments:[], weeklyReports:[], absences:[], remoteRequests:[], filterStatus:'all', filterDept:'all', searchText:'', currentUser:null };
+let state = { tasks:[], decisions:[], departments:[], weeklyReports:[], absences:[], remoteRequests:[], filterStatus:'all', filterDept:'all', searchText:'', currentUser:null, openDeptGroups:{ absence:new Set(), remote:new Set() } };
 
 function isConfigured(){
   return SUPABASE_URL && SUPABASE_URL.startsWith('http') && SUPABASE_ANON_KEY && SUPABASE_ANON_KEY.length > 10;
@@ -1170,6 +1195,60 @@ function renderDeptChart(){
   `;
 }
 
+// مجموعة أدوات مشتركة لبناء "قائمة الأقسام المنسدلة" (Accordion) مع نقطة نابضة
+// تظهر فقط على الأقسام التي فيها عنصر بحالة "قيد المراجعة" (لم يُتخذ فيه قرار بعد).
+function isPendingItem(item){
+  return item.status === 'قيد المراجعة' || !item.status;
+}
+
+function buildDeptAccordionHtml(kind, list, cardHtmlFn){
+  const groups = new Map();
+  list.forEach(item=>{
+    const key = item.department_id || '__none__';
+    if(!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item);
+  });
+
+  const orderedDeptIds = state.departments.map(d=>d.id).filter(id=>groups.has(id));
+  if(groups.has('__none__')) orderedDeptIds.push('__none__');
+
+  const openSet = state.openDeptGroups[kind];
+
+  return orderedDeptIds.map(deptId=>{
+    const items = groups.get(deptId);
+    const hasPending = items.some(isPendingItem);
+    const isOpen = openSet.has(deptId);
+    const name = deptId === '__none__' ? 'بدون قسم' : deptName(deptId);
+    return `
+      <div class="dept-group ${isOpen ? 'open' : ''}" data-dept-id="${deptId}">
+        <div class="dept-group-head" data-kind="${kind}" data-dept-id="${deptId}">
+          <div class="dept-group-title">
+            ${hasPending ? '<span class="pulse-dot" title="توجد تقارير جديدة تحتاج قرارًا"></span>' : ''}
+            <span>${escapeHtml(name)}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span class="dept-group-count">${items.length}</span>
+            <span class="dept-group-toggle">▾</span>
+          </div>
+        </div>
+        <div class="dept-group-body">
+          ${items.map(cardHtmlFn).join('')}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function wireDeptAccordionToggles(panel, kind, onRerender){
+  panel.querySelectorAll(`.dept-group-head[data-kind="${kind}"]`).forEach(head=>{
+    head.onclick = ()=>{
+      const id = head.dataset.deptId;
+      const openSet = state.openDeptGroups[kind];
+      if(openSet.has(id)) openSet.delete(id); else openSet.add(id);
+      onRerender();
+    };
+  });
+}
+
 function renderAbsences(){
   const panel = document.getElementById('absencesPanel');
   const role = state.currentUser.role;
@@ -1177,7 +1256,7 @@ function renderAbsences(){
   const scoped = role === 'department'
     ? state.absences.filter(a => a.department_id === state.currentUser.department_id)
     : state.absences;
-  const list = scoped.filter(a => a.status === 'قيد المراجعة' || !a.status || isWithinGracePeriod(a.decided_at));
+  const list = scoped.filter(a => isPendingItem(a) || isWithinGracePeriod(a.decided_at));
 
   const decisionBlock = (item, kind) => {
     if(item.status === 'مقبول') return `<span class="badge-inline badge-approved">✅ مقبول</span>`;
@@ -1186,7 +1265,7 @@ function renderAbsences(){
     return `<span class="badge-inline badge-pending">📋 قيد المراجعة</span>`;
   };
 
-  const cards = list.map(a => `
+  const cardHtml = a => `
     <div class="record-card">
       <div class="record-card-head">
         <div class="record-card-title"><span class="rg-label">اسم العضو:</span> ${escapeHtml(a.faculty_name)}${a.course_name ? `<span class="record-card-sub">  <span class="rg-label">المادة:</span> ${escapeHtml(a.course_name)}</span>` : ''}</div>
@@ -1203,19 +1282,26 @@ function renderAbsences(){
       <div class="record-card-notes"><span class="rg-label">مرئيات رئيس القسم</span> ${escapeHtml(a.head_notes || '—')}</div>
       <div class="record-card-decision">${decisionBlock(a, 'absence')}</div>
     </div>
-  `).join('');
+  `;
+
+  const useAccordion = role !== 'department';
+  const bodyHtml = list.length === 0
+    ? `<div class="empty-note">لا توجد غيابات مسجّلة بعد.</div>`
+    : (useAccordion
+        ? `<div class="dept-accordion">${buildDeptAccordionHtml('absence', list, cardHtml)}</div>`
+        : `<div class="record-list">${list.map(cardHtml).join('')}</div>`);
 
   panel.innerHTML = `
     <div class="panel-head">
       <h2>📆 تقرير القسم الأسبوعي</h2>
       <button class="btn-primary" id="addAbsenceBtn">+ رفع التقرير</button>
     </div>
-    <div class="record-list">
-      ${list.length === 0 ? `<div class="empty-note">لا توجد غيابات مسجّلة بعد.</div>` : cards}
-    </div>
+    ${bodyHtml}
   `;
 
   document.getElementById('addAbsenceBtn').onclick = openAddAbsenceModal;
+
+  if(useAccordion) wireDeptAccordionToggles(panel, 'absence', renderAbsences);
 
   panel.querySelectorAll('.decide-btn[data-kind="absence"]').forEach(btn=>{
     btn.onclick = async ()=>{
@@ -1249,7 +1335,7 @@ function renderRemoteRequests(){
   const scoped = role === 'department'
     ? state.remoteRequests.filter(r => r.department_id === state.currentUser.department_id)
     : state.remoteRequests;
-  const list = scoped.filter(r => r.status === 'قيد المراجعة' || !r.status || isWithinGracePeriod(r.decided_at));
+  const list = scoped.filter(r => isPendingItem(r) || isWithinGracePeriod(r.decided_at));
 
   const decisionBlock = (item, kind) => {
     if(item.status === 'مقبول') return `<span class="badge-inline badge-approved">✅ مقبول</span>`;
@@ -1258,7 +1344,7 @@ function renderRemoteRequests(){
     return `<span class="badge-inline badge-pending">📋 قيد المراجعة</span>`;
   };
 
-  const cards = list.map(r => `
+  const cardHtml = r => `
     <div class="record-card">
       <div class="record-card-head">
         <div class="record-card-title"><span class="rg-label">اسم العضو:</span> ${escapeHtml(r.faculty_name)}${r.course_name ? `<span class="record-card-sub">  <span class="rg-label">المادة:</span> ${escapeHtml(r.course_name)}</span>` : ''}</div>
@@ -1272,19 +1358,26 @@ function renderRemoteRequests(){
       <div class="record-card-notes"><span class="rg-label">مرئيات رئيس القسم</span> ${escapeHtml(r.head_notes || '—')}</div>
       <div class="record-card-decision">${decisionBlock(r, 'remote')}</div>
     </div>
-  `).join('');
+  `;
+
+  const useAccordion = role !== 'department';
+  const bodyHtml = list.length === 0
+    ? `<div class="empty-note">لا توجد طلبات مسجّلة بعد.</div>`
+    : (useAccordion
+        ? `<div class="dept-accordion">${buildDeptAccordionHtml('remote', list, cardHtml)}</div>`
+        : `<div class="record-list">${list.map(cardHtml).join('')}</div>`);
 
   panel.innerHTML = `
     <div class="panel-head">
       <h2>📡 طلب تحويل محاضرة حضورية إلى عن بعد</h2>
       <button class="btn-primary" id="addRemoteBtn">+ تسجيل طلب</button>
     </div>
-    <div class="record-list">
-      ${list.length === 0 ? `<div class="empty-note">لا توجد طلبات مسجّلة بعد.</div>` : cards}
-    </div>
+    ${bodyHtml}
   `;
 
   document.getElementById('addRemoteBtn').onclick = openAddRemoteModal;
+
+  if(useAccordion) wireDeptAccordionToggles(panel, 'remote', renderRemoteRequests);
 
   panel.querySelectorAll('.decide-btn[data-kind="remote"]').forEach(btn=>{
     btn.onclick = async ()=>{
