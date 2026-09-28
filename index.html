@@ -1397,7 +1397,7 @@ function renderRemoteRequests(){
         ${role === 'department' ? '' : `<span class="record-card-dept">${escapeHtml(deptName(r.department_id))}</span>`}
       </div>
       <div class="record-grid">
-        <div><span class="rg-label">تاريخ المحاضرة</span><span class="rg-value">${r.lecture_date || '—'}</span></div>
+        <div><span class="rg-label">تاريخ المحاضرة</span><span class="rg-value">${dualDateLabel(r.lecture_date)}</span></div>
         <div><span class="rg-label">الوقت</span><span class="rg-value">${escapeHtml(r.lecture_time || '—')}</span></div>
       </div>
       <div class="record-card-notes"><span class="rg-label">مسوغات الطلب</span> ${escapeHtml(r.justification || '—')}</div>
@@ -1503,22 +1503,34 @@ function renderRemoteArchive(){
   `;
 }
 
-function remoteRowTemplate(idx){
+function remoteLectureTemplate(){
   const timeOpts = absenceTimeOptions().map(t=>`<option value="${t}">${t}</option>`).join('');
   const today = new Date().toISOString().slice(0,10);
   return `
-    <div class="abs-row" data-idx="${idx}">
-      <div class="abs-row-head">
-        <span class="abs-row-title">طلب ${idx + 1}</span>
-        <button type="button" class="rem-row-remove" data-idx="${idx}">🗑 حذف</button>
+    <div class="abs-lecture">
+      <div class="abs-lecture-head">
+        <span class="abs-lecture-title">محاضرة</span>
+        <button type="button" class="abs-lecture-remove">🗑 حذف المحاضرة</button>
       </div>
-      <div class="field"><label>عضو هيئة التدريس</label><input class="remFaculty" type="text"></div>
       <div class="field"><label>اسم المادة</label><input class="remCourse" type="text"></div>
-      <div class="field"><label>تاريخ المحاضرة</label><input class="remDate" type="date" min="${today}"></div>
+      <div class="field"><label>تاريخ المحاضرة</label><input class="remDate" type="date" min="${today}"><div class="abs-hijri-hint"></div></div>
       <div class="field"><label>الوقت</label>
         <select class="remTime"><option value="">— اختر الوقت —</option>${timeOpts}</select>
       </div>
       <div class="field"><label>مسوغات الطلب <span class="required-mark">*</span></label><textarea class="remJustification"></textarea></div>
+    </div>`;
+}
+
+function remoteMemberTemplate(idx){
+  return `
+    <div class="abs-member abs-row" data-idx="${idx}">
+      <div class="abs-row-head">
+        <span class="abs-row-title">عضو ${idx + 1}</span>
+        <button type="button" class="abs-row-remove abs-member-remove" data-idx="${idx}">🗑 حذف العضو</button>
+      </div>
+      <div class="field"><label>عضو هيئة التدريس</label><input class="remFaculty" type="text"></div>
+      <div class="abs-lectures">${remoteLectureTemplate()}</div>
+      <button type="button" class="btn-text abs-add-lecture">+ إضافة محاضرة أخرى لنفس العضو</button>
     </div>`;
 }
 
@@ -1527,7 +1539,7 @@ function openAddRemoteModal(){
   const isFullEditor = EDITOR_ROLES.includes(role);
   const overlay = document.getElementById('modalOverlay');
   overlay.classList.remove('hidden');
-  let rowCount = 1;
+  let memberCount = 1;
 
   overlay.innerHTML = `
     <div class="modal modal-wide">
@@ -1536,9 +1548,9 @@ function openAddRemoteModal(){
       <div class="field"><label>القسم</label>
         <select id="remDept">${state.departments.map(d=>`<option value="${d.id}">${d.name}</option>`).join('')}</select>
       </div>` : ''}
-      <div id="remRowsContainer">${remoteRowTemplate(0)}</div>
+      <div id="remRowsContainer">${remoteMemberTemplate(0)}</div>
+      <button type="button" class="btn-text" id="remAddRow">+ إضافة عضو آخر</button>
       <div class="field" style="margin-top:14px;"><label>مرئيات رئيس القسم حيال الطلب <span class="required-mark">*</span></label><textarea id="remNotes"></textarea></div>
-      <button type="button" class="btn-text" id="remAddRow">+ إضافة طلب آخر</button>
       <p class="login-error hidden" id="remErr"></p>
       <div class="modal-actions">
         <button class="btn-ghost" id="remCancel">إلغاء</button>
@@ -1548,20 +1560,45 @@ function openAddRemoteModal(){
 
   const rowsContainer = document.getElementById('remRowsContainer');
 
-  function rebindRemoveButtons(){
-    rowsContainer.querySelectorAll('.rem-row-remove').forEach(btn=>{
+  function rebindLectureButtons(lecturesContainer){
+    lecturesContainer.querySelectorAll('.abs-lecture-remove').forEach(btn=>{
       btn.onclick = ()=>{
-        if(rowsContainer.querySelectorAll('.abs-row').length <= 1) return;
-        btn.closest('.abs-row').remove();
+        if(lecturesContainer.querySelectorAll('.abs-lecture').length <= 1) return;
+        btn.closest('.abs-lecture').remove();
       };
     });
+    lecturesContainer.querySelectorAll('.remDate').forEach(dateInput=>{
+      const hint = dateInput.closest('.field').querySelector('.abs-hijri-hint');
+      if(!hint || dateInput.dataset.hijriBound) return;
+      dateInput.dataset.hijriBound = '1';
+      dateInput.addEventListener('input', ()=>{
+        hint.textContent = dateInput.value ? hijriDate(dateInput.value) : '';
+      });
+    });
   }
-  rebindRemoveButtons();
+
+  function rebindMemberButtons(){
+    rowsContainer.querySelectorAll('.abs-member-remove').forEach(btn=>{
+      btn.onclick = ()=>{
+        if(rowsContainer.querySelectorAll('.abs-member').length <= 1) return;
+        btn.closest('.abs-member').remove();
+      };
+    });
+    rowsContainer.querySelectorAll('.abs-add-lecture').forEach(btn=>{
+      btn.onclick = ()=>{
+        const lecturesContainer = btn.closest('.abs-member').querySelector('.abs-lectures');
+        lecturesContainer.insertAdjacentHTML('beforeend', remoteLectureTemplate());
+        rebindLectureButtons(lecturesContainer);
+      };
+    });
+    rowsContainer.querySelectorAll('.abs-lectures').forEach(rebindLectureButtons);
+  }
+  rebindMemberButtons();
 
   document.getElementById('remAddRow').onclick = ()=>{
-    rowCount++;
-    rowsContainer.insertAdjacentHTML('beforeend', remoteRowTemplate(rowCount - 1));
-    rebindRemoveButtons();
+    memberCount++;
+    rowsContainer.insertAdjacentHTML('beforeend', remoteMemberTemplate(memberCount - 1));
+    rebindMemberButtons();
   };
 
   document.getElementById('remCancel').onclick = closeModal;
@@ -1582,43 +1619,47 @@ function openAddRemoteModal(){
       return;
     }
 
-    const rowEls = [...rowsContainer.querySelectorAll('.abs-row')];
-    const filledRows = rowEls.filter(rowEl => rowEl.querySelector('.remFaculty').value.trim());
+    const memberEls = [...rowsContainer.querySelectorAll('.abs-member')];
+    const filledMembers = memberEls.filter(m => m.querySelector('.remFaculty').value.trim());
 
-    if(filledRows.length === 0){
+    if(filledMembers.length === 0){
       errEl.textContent = 'لازم تعبّي اسم عضو هيئة تدريس وحد على الأقل.';
       errEl.classList.remove('hidden');
       return;
     }
 
-    for(const rowEl of filledRows){
-      if(!rowEl.querySelector('.remJustification').value.trim()){
-        errEl.textContent = 'مسوغات الطلب إلزامية لكل طلب مسجّل.';
-        errEl.classList.remove('hidden');
-        return;
+    for(const memberEl of filledMembers){
+      for(const lecEl of memberEl.querySelectorAll('.abs-lecture')){
+        if(!lecEl.querySelector('.remJustification').value.trim()){
+          errEl.textContent = 'مسوغات الطلب إلزامية لكل محاضرة مسجّلة.';
+          errEl.classList.remove('hidden');
+          return;
+        }
       }
     }
 
-    const entries = [];
     const today = new Date().toISOString().slice(0,10);
+    const entries = [];
 
-    for(const rowEl of filledRows){
-      const facultyName = rowEl.querySelector('.remFaculty').value.trim();
-      const lectureDate = rowEl.querySelector('.remDate').value || null;
-      if(lectureDate && lectureDate < today){
-        errEl.textContent = 'لا يمكن تسجيل طلب تحويل لتاريخ سابق — التاريخ لازم يكون اليوم أو بعده.';
-        errEl.classList.remove('hidden');
-        return;
+    for(const memberEl of filledMembers){
+      const facultyName = memberEl.querySelector('.remFaculty').value.trim();
+      for(const lecEl of memberEl.querySelectorAll('.abs-lecture')){
+        const lectureDate = lecEl.querySelector('.remDate').value || null;
+        if(lectureDate && lectureDate < today){
+          errEl.textContent = 'لا يمكن تسجيل طلب تحويل لتاريخ سابق — التاريخ لازم يكون اليوم أو بعده.';
+          errEl.classList.remove('hidden');
+          return;
+        }
+        entries.push({
+          department_id: deptId,
+          faculty_name: facultyName,
+          course_name: lecEl.querySelector('.remCourse').value || null,
+          lecture_date: lectureDate,
+          lecture_time: lecEl.querySelector('.remTime').value || null,
+          justification: lecEl.querySelector('.remJustification').value.trim(),
+          head_notes: sharedNotes
+        });
       }
-      entries.push({
-        department_id: deptId,
-        faculty_name: facultyName,
-        course_name: rowEl.querySelector('.remCourse').value || null,
-        lecture_date: lectureDate,
-        lecture_time: rowEl.querySelector('.remTime').value || null,
-        justification: rowEl.querySelector('.remJustification').value.trim(),
-        head_notes: sharedNotes
-      });
     }
 
     if(entries.length === 0){
@@ -2759,7 +2800,7 @@ function generatePeriodReport(start, end, deptId){
             <tr>
               <td>${escapeHtml(r.faculty_name)}</td>
               <td>${escapeHtml(r.course_name || '—')}</td>
-              <td>${r.lecture_date || '—'}</td>
+              <td>${dualDateLabel(r.lecture_date)}</td>
               <td>${escapeHtml(r.lecture_time || '—')}</td>
               <td>${escapeHtml(r.status || 'قيد المراجعة')}</td>
             </tr>`).join('')}
@@ -2781,7 +2822,7 @@ function generatePeriodReport(start, end, deptId){
                   <tr>
                     <td>${escapeHtml(r.faculty_name)}</td>
                     <td>${escapeHtml(r.course_name || '—')}</td>
-                    <td>${r.lecture_date || '—'}</td>
+                    <td>${dualDateLabel(r.lecture_date)}</td>
                     <td>${escapeHtml(r.lecture_time || '—')}</td>
                     <td>${escapeHtml(r.status || 'قيد المراجعة')}</td>
                   </tr>`).join('')}
