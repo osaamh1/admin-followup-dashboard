@@ -425,6 +425,8 @@
   .dept-group-head:hover{background:var(--paper);}
   .dept-group-title{display:flex;align-items:center;gap:9px;font-weight:700;font-size:14.5px;color:var(--seal-dark);}
   .dept-group-count{font-size:12px;font-weight:600;color:var(--ink-soft);background:var(--paper);border:1px solid var(--line);padding:2px 10px;border-radius:20px;}
+  .dept-group-count.pending{color:var(--redd);background:var(--redd-tint);border-color:transparent;}
+  .dept-group-count.done{color:var(--green);background:var(--green-tint);border-color:transparent;}
   .dept-group-toggle{font-size:12px;color:var(--ink-soft);transition:transform .2s ease;}
   .dept-group.open .dept-group-toggle{transform:rotate(180deg);}
   .dept-group-body{display:none;padding:14px 16px;flex-direction:column;gap:14px;border-top:1px solid var(--line);}
@@ -1227,7 +1229,8 @@ function buildDeptAccordionHtml(kind, list, cardHtmlFn){
     const name = deptId === '__none__' ? 'بدون قسم' : deptName(deptId);
     const countLabel = hasPending
       ? `${pendingCount} ${noun} قيد الانتظار`
-      : `${items.length}`;
+      : `✅ ${items.length} ${noun} منتهية`;
+    const countClass = hasPending ? 'pending' : 'done';
     return `
       <div class="dept-group ${isOpen ? 'open' : ''}" data-dept-id="${deptId}">
         <div class="dept-group-head" data-kind="${kind}" data-dept-id="${deptId}">
@@ -1236,7 +1239,7 @@ function buildDeptAccordionHtml(kind, list, cardHtmlFn){
             <span>${escapeHtml(name)}</span>
           </div>
           <div style="display:flex;align-items:center;gap:10px;">
-            <span class="dept-group-count">${countLabel}</span>
+            <span class="dept-group-count ${countClass}">${countLabel}</span>
             <span class="dept-group-toggle">▾</span>
           </div>
         </div>
