@@ -767,6 +767,7 @@ function renderShell(){
         <div class="mast-left">
           <div class="mast-controls">
             <button class="btn-ghost ${EDITOR_ROLES.includes(state.currentUser.role) ? '' : 'hidden'}" id="refreshOverdueBtn">تحديث الحالات المتأخرة</button>
+            <button class="btn-ghost ${state.currentUser.role !== 'department' ? '' : 'hidden'}" id="pendingSummaryBtn">🗂️ ملخص للعميد</button>
             <button class="btn-ghost ${state.currentUser.role !== 'department' ? '' : 'hidden'}" id="genReportBtn">📄 إصدار تقرير</button>
             <button class="btn-ghost" id="changePassBtn">🔒 تغيير كلمة المرور</button>
             <button class="logout-btn" id="logoutBtn">🚪 خروج</button>
@@ -843,6 +844,7 @@ function renderShell(){
   document.getElementById('logoutBtn').onclick = logout;
   document.getElementById('changePassBtn').onclick = openChangePasswordModal;
   document.getElementById('genReportBtn').onclick = openGenerateReportModal;
+  document.getElementById('pendingSummaryBtn').onclick = generatePendingDecisionsSummary;
 }
 
 function openChangePasswordModal(){
@@ -2207,6 +2209,180 @@ function openGenerateReportModal(){
     generatePeriodReport(start, end, deptId);
     closeModal();
   };
+}
+
+// ============================================
+// ملخص مبسّط للعرض على فضيلة العميد: كل الطلبات
+// (غياب / تحويل محاضرة) اللي لسه تحتاج قرار، بأقل تفاصيل ممكنة.
+// ============================================
+function generatePendingDecisionsSummary(){
+  const pendingAbsences = state.absences.filter(isPendingItem).map(a => ({
+    type: 'absence',
+    department_id: a.department_id,
+    faculty_name: a.faculty_name,
+    course_name: a.course_name,
+    date: a.absence_date,
+    typeLabel: a.absence_type === 'بعذر' ? 'غياب بعذر' : 'غياب بدون عذر',
+    typeClass: a.absence_type === 'بعذر' ? 'tag-ok' : 'tag-warn',
+    head_notes: a.head_notes
+  }));
+  const pendingRemote = state.remoteRequests.filter(isPendingItem).map(r => ({
+    type: 'remote',
+    department_id: r.department_id,
+    faculty_name: r.faculty_name,
+    course_name: r.course_name,
+    date: r.lecture_date,
+    typeLabel: 'طلب تحويل لعن بعد',
+    typeClass: 'tag-info',
+    head_notes: r.head_notes
+  }));
+
+  const all = [...pendingAbsences, ...pendingRemote];
+
+  const byDept = new Map();
+  all.forEach(item=>{
+    const key = item.department_id || '__none__';
+    if(!byDept.has(key)) byDept.set(key, []);
+    byDept.get(key).push(item);
+  });
+  const orderedDeptIds = state.departments.map(d=>d.id).filter(id=>byDept.has(id));
+  if(byDept.has('__none__')) orderedDeptIds.push('__none__');
+  orderedDeptIds.forEach(id => byDept.get(id).sort((x,y)=>(x.date||'').localeCompare(y.date||'')));
+
+  const rowHtml = item => `
+    <tr>
+      <td style="text-align:right;font-weight:700;">${escapeHtml(item.faculty_name || '—')}${item.course_name ? ` <span style="font-weight:400;color:var(--ink-soft);">— ${escapeHtml(item.course_name)}</span>` : ''}</td>
+      <td>${item.date || '—'}</td>
+      <td><span class="tag ${item.typeClass}">${item.typeLabel}</span></td>
+      <td style="text-align:right;color:var(--ink-soft);">${item.head_notes ? escapeHtml(item.head_notes.slice(0,80)) + (item.head_notes.length>80?'…':'') : '—'}</td>
+    </tr>`;
+
+  const deptSectionsHtml = orderedDeptIds.length === 0
+    ? `<div class="empty-note">لا توجد أي طلبات تحتاج قرارًا حاليًا. كل شيء معتمد. ✅</div>`
+    : orderedDeptIds.map(dId => {
+        const items = byDept.get(dId);
+        const name = dId === '__none__' ? 'بدون قسم' : deptName(dId);
+        return `
+      <div class="dept-block">
+        <div class="dept-block-head"><span>${escapeHtml(name)}</span><span class="dept-block-count">${items.length}</span></div>
+        <table>
+          <thead><tr><th>عضو هيئة التدريس</th><th>التاريخ</th><th>نوع الطلب</th><th>مرئيات رئيس القسم</th></tr></thead>
+          <tbody>${items.map(rowHtml).join('')}</tbody>
+        </table>
+      </div>`;
+      }).join('');
+
+  const html = `
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>ملخص الطلبات المعلّقة — وحدة المتابعة الإدارية</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@500;700;900&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1C2321; --ink-soft:#4A524E; --paper:#EEEEE5; --line:#D7D3C5;
+    --seal-dark:#12294F; --teal:#1C9E93; --teal-tint:#DEF3F1;
+    --amber:#9C6B1E; --amber-tint:#F1E7D3; --green:#2D6A4C; --green-tint:#DEEAE2;
+    --redd:#C0392B; --redd-tint:#F7DCD8;
+  }
+  *{box-sizing:border-box;}
+  html{background:linear-gradient(180deg, var(--redd-tint) 0%, var(--paper) 320px);}
+  body{
+    font-family:'IBM Plex Sans Arabic',sans-serif;color:var(--ink);margin:0;
+    padding:40px 24px;font-size:15px;line-height:1.7;
+  }
+  .sheet{
+    max-width:880px;margin:0 auto;background:#fff;border-radius:10px;
+    padding:36px 40px;box-shadow:0 8px 28px rgba(18,41,79,0.12);
+    border-top:6px solid var(--redd);
+  }
+  h1,h2{font-family:'Noto Kufi Arabic',sans-serif;margin:0;}
+  .report-header{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid var(--redd);padding-bottom:18px;margin-bottom:24px;}
+  .report-header img{height:64px;}
+  .report-header h1{font-size:24px;color:var(--seal-dark);}
+  .report-sub{color:var(--ink-soft);font-size:13px;margin-top:6px;}
+  .period-badge{
+    display:inline-block;background:var(--seal-dark);color:#fff;
+    padding:9px 20px;border-radius:6px;font-weight:700;font-size:14px;margin-bottom:24px;
+  }
+  .summary-strip{display:flex;gap:16px;margin-bottom:28px;}
+  .summary-box{
+    flex:1;border-radius:8px;padding:18px;text-align:center;
+    background:var(--redd-tint);border:1px solid #EFC9C2;
+  }
+  .summary-box.ok{background:var(--green-tint);border-color:#BFDECB;}
+  .summary-box .num{font-family:'Noto Kufi Arabic',sans-serif;font-size:34px;font-weight:900;color:var(--seal-dark);}
+  .summary-box .lbl{font-size:12.5px;color:var(--ink-soft);margin-top:5px;font-weight:600;}
+  .dept-block{border:1px solid var(--line);border-radius:8px;margin-bottom:16px;overflow:hidden;}
+  .dept-block-head{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:13px 18px;background:var(--seal-dark);color:#fff;
+    font-family:'Noto Kufi Arabic',sans-serif;font-weight:700;font-size:15px;
+  }
+  .dept-block-count{background:rgba(255,255,255,.18);padding:2px 12px;border-radius:20px;font-size:12.5px;font-family:'IBM Plex Sans Arabic',sans-serif;}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  th{background:var(--paper);color:var(--seal-dark);text-align:center;padding:10px 12px;font-size:12px;font-weight:700;border-bottom:2px solid var(--line);}
+  td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:middle;text-align:center;}
+  tr:last-child td{border-bottom:none;}
+  .tag{display:inline-block;padding:3px 12px;border-radius:20px;font-size:12px;font-weight:700;white-space:nowrap;}
+  .tag-ok{background:var(--green-tint);color:var(--green);}
+  .tag-warn{background:var(--redd-tint);color:var(--redd);}
+  .tag-info{background:var(--teal-tint);color:var(--teal);}
+  .empty-note{color:var(--ink-soft);font-size:14px;text-align:center;padding:30px;background:var(--paper);border-radius:6px;}
+  .report-footer{
+    margin-top:32px;padding-top:16px;border-top:2px solid var(--line);
+    font-size:12px;color:var(--ink-soft);display:flex;justify-content:space-between;
+  }
+  .print-bar{max-width:880px;margin:0 auto 16px;text-align:left;}
+  .print-bar button{
+    background:var(--seal-dark);color:#fff;border:none;padding:11px 22px;border-radius:6px;
+    font-family:'IBM Plex Sans Arabic',sans-serif;font-size:14px;font-weight:700;cursor:pointer;
+    box-shadow:0 3px 10px rgba(18,41,79,0.25);
+  }
+  .print-bar button:hover{background:var(--redd);}
+  @media print{
+    html{background:#fff;}
+    .print-bar{display:none;}
+    body{padding:0;}
+    .sheet{box-shadow:none;border-radius:0;max-width:none;border-top:6px solid var(--redd);}
+  }
+</style>
+</head>
+<body>
+  <div class="print-bar"><button onclick="window.print()">🖨 طباعة / حفظ PDF</button></div>
+  <div class="sheet">
+
+  <div class="report-header">
+    <div>
+      <h1>ملخص الطلبات المعلّقة</h1>
+      <div class="report-sub">كلية الشريعة — جامعة القصيم · معروض لفضيلة العميد</div>
+    </div>
+    <img src="${LOGO_DATA_URI}" alt="شعار الكلية">
+  </div>
+
+  <span class="period-badge">بتاريخ: ${new Date().toLocaleDateString('ar-SA')}</span>
+
+  <div class="summary-strip">
+    <div class="summary-box ${all.length === 0 ? 'ok' : ''}"><div class="num">${all.length}</div><div class="lbl">إجمالي الطلبات المعلّقة</div></div>
+    <div class="summary-box"><div class="num">${pendingAbsences.length}</div><div class="lbl">غياب بانتظار القرار</div></div>
+    <div class="summary-box"><div class="num">${pendingRemote.length}</div><div class="lbl">تحويل محاضرة بانتظار القرار</div></div>
+    <div class="summary-box"><div class="num">${orderedDeptIds.filter(id=>id!=='__none__').length}</div><div class="lbl">أقسام لديها طلبات</div></div>
+  </div>
+
+  ${deptSectionsHtml}
+
+  <div class="report-footer">
+    <span>أُعدّ بواسطة: ${escapeHtml(state.currentUser.full_name)}</span>
+    <span>تاريخ الإعداد: ${new Date().toLocaleDateString('ar-SA')}</span>
+  </div>
+  </div>
+</body>
+</html>`;
+
+  const w = window.open('', '_blank');
+  w.document.write(html);
+  w.document.close();
 }
 
 function generatePeriodReport(start, end, deptId){
