@@ -252,6 +252,21 @@
     background:none;border:none;color:var(--redd);font-size:12px;cursor:pointer;
   }
   .abs-row-remove:hover{text-decoration:underline;}
+  .abs-lectures{display:flex;flex-direction:column;gap:10px;margin:10px 0;}
+  .abs-lecture{
+    border:1px dashed var(--line);border-radius:calc(var(--radius) - 4px);
+    padding:12px;background:#fff;
+  }
+  .abs-lecture-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+  .abs-lecture-title{font-weight:700;color:var(--teal);font-size:12.5px;}
+  .abs-lecture-remove{background:none;border:none;color:var(--redd);font-size:11.5px;cursor:pointer;}
+  .abs-lecture-remove:hover{text-decoration:underline;}
+  .abs-add-lecture{margin-bottom:4px;}
+  .abs-review-list{display:flex;flex-direction:column;gap:10px;margin:10px 0;}
+  .abs-review-item{border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;background:var(--paper);}
+  .abs-review-item-head{display:flex;justify-content:space-between;align-items:center;font-weight:700;color:var(--seal-dark);font-size:13.5px;margin-bottom:8px;}
+  .abs-review-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;font-size:12.5px;color:var(--ink);}
+  .abs-review-notes{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px;font-size:13px;color:var(--ink);white-space:pre-wrap;}
   .modal h3{font-size:18px;color:var(--seal-dark);margin-bottom:16px;}
   .field{margin-bottom:14px;}
   .field label{display:block;font-size:13px;color:var(--ink-soft);margin-bottom:5px;}
@@ -410,6 +425,8 @@
   .record-grid > div{display:flex;flex-direction:column;gap:2px;}
   .rg-label{font-size:11px;color:var(--ink-soft);}
   .rg-value{font-size:13px;color:var(--ink);}
+  .hijri-inline{font-size:11px;color:var(--ink-soft);white-space:nowrap;}
+  .abs-hijri-hint{font-size:11.5px;color:var(--ink-soft);margin-top:4px;}
   .record-card-notes{font-size:13px;color:var(--ink);margin-bottom:8px;line-height:1.6;}
   .record-card-notes .rg-label{display:inline;font-weight:700;color:var(--ink-soft);}
   .record-card-decision{padding-top:8px;border-top:1px solid var(--line);}
@@ -1166,6 +1183,23 @@ function sanitizeFileName(name){
   return ext ? `${base}.${ext}` : base;
 }
 
+// يحوّل تاريخ ميلادي (YYYY-MM-DD) إلى نص هجري مختصر، يُستخدم أينما ظهر تاريخ غياب
+function hijriDate(isoStr){
+  if(!isoStr) return '';
+  try{
+    const d = new Date(isoStr + 'T00:00:00');
+    if(isNaN(d.getTime())) return '';
+    return new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura', { year:'numeric', month:'2-digit', day:'2-digit' }).format(d) + ' هـ';
+  }catch(e){ return ''; }
+}
+
+// يبني نص التاريخ الكامل (ميلادي + هجري) للعرض في الجداول والتقارير
+function dualDateLabel(isoStr){
+  if(!isoStr) return '—';
+  const h = hijriDate(isoStr);
+  return h ? `${isoStr} <span class="hijri-inline">(${h})</span>` : isoStr;
+}
+
 function renderDeptChart(){
   const panel = document.getElementById('deptChartPanel');
   const role = state.currentUser.role;
@@ -1285,7 +1319,7 @@ function renderAbsences(){
       </div>
       <div class="record-grid">
         <div><span class="rg-label">رقم الشعبة</span><span class="rg-value">${escapeHtml(a.section_number || '—')}</span></div>
-        <div><span class="rg-label">تاريخ الغياب</span><span class="rg-value">${a.absence_date || '—'}</span></div>
+        <div><span class="rg-label">تاريخ الغياب</span><span class="rg-value">${dualDateLabel(a.absence_date)}</span></div>
         <div><span class="rg-label">الوقت</span><span class="rg-value">${escapeHtml(a.absence_time || '—')}</span></div>
         <div><span class="rg-label">القاعة</span><span class="rg-value">${escapeHtml(a.room || '—')}</span></div>
         <div><span class="rg-label">نوع الغياب</span><span class="rg-value"><span class="badge ${a.absence_type === 'بعذر' ? 'st-جارية' : 'st-متعثرة'}">${escapeHtml(a.absence_type || '—')}</span></span></div>
@@ -1614,18 +1648,17 @@ function absenceTimeOptions(){
   return opts;
 }
 
-function absenceRowTemplate(idx){
+function absenceLectureTemplate(){
   const timeOpts = absenceTimeOptions().map(t=>`<option value="${t}">${t}</option>`).join('');
   return `
-    <div class="abs-row" data-idx="${idx}">
-      <div class="abs-row-head">
-        <span class="abs-row-title">عضو ${idx + 1}</span>
-        <button type="button" class="abs-row-remove" data-idx="${idx}">🗑 حذف</button>
+    <div class="abs-lecture">
+      <div class="abs-lecture-head">
+        <span class="abs-lecture-title">محاضرة</span>
+        <button type="button" class="abs-lecture-remove">🗑 حذف المحاضرة</button>
       </div>
-      <div class="field"><label>عضو هيئة التدريس</label><input class="absFaculty" type="text"></div>
       <div class="field"><label>اسم المادة</label><input class="absCourse" type="text"></div>
       <div class="field"><label>رقم الشعبة</label><input class="absSection" type="text"></div>
-      <div class="field"><label>تاريخ الغياب</label><input class="absDate" type="date"></div>
+      <div class="field"><label>تاريخ الغياب</label><input class="absDate" type="date"><div class="abs-hijri-hint"></div></div>
       <div class="field"><label>الوقت</label>
         <select class="absTime"><option value="">— اختر الوقت —</option>${timeOpts}</select>
       </div>
@@ -1637,50 +1670,92 @@ function absenceRowTemplate(idx){
     </div>`;
 }
 
+function absenceMemberTemplate(idx){
+  return `
+    <div class="abs-member abs-row" data-idx="${idx}">
+      <div class="abs-row-head">
+        <span class="abs-row-title">عضو ${idx + 1}</span>
+        <button type="button" class="abs-row-remove abs-member-remove" data-idx="${idx}">🗑 حذف العضو</button>
+      </div>
+      <div class="field"><label>عضو هيئة التدريس</label><input class="absFaculty" type="text"></div>
+      <div class="abs-lectures">${absenceLectureTemplate()}</div>
+      <button type="button" class="btn-text abs-add-lecture">+ إضافة محاضرة أخرى لنفس العضو (نفس اليوم)</button>
+    </div>`;
+}
+
 function openAddAbsenceModal(){
   const role = state.currentUser.role;
   const isFullEditor = EDITOR_ROLES.includes(role);
   const overlay = document.getElementById('modalOverlay');
   overlay.classList.remove('hidden');
-  let rowCount = 1;
+  let memberCount = 1;
 
   overlay.innerHTML = `
     <div class="modal modal-wide">
-      <h3>تقرير القسم الأسبوعي</h3>
-      ${isFullEditor ? `
-      <div class="field"><label>القسم</label>
-        <select id="absDept">${state.departments.map(d=>`<option value="${d.id}">${d.name}</option>`).join('')}</select>
-      </div>` : ''}
-      <div id="absRowsContainer">${absenceRowTemplate(0)}</div>
-      <div class="field" style="margin-top:14px;"><label>مرئيات رئيس القسم بشأن التقرير <span class="required-mark">*</span></label><textarea id="absNotes"></textarea></div>
-      <button type="button" class="btn-text" id="absAddRow">+ إضافة عضو آخر</button>
-      <p class="login-error hidden" id="absErr"></p>
-      <div class="modal-actions">
-        <button class="btn-ghost" id="absCancel">إلغاء</button>
-        <button class="btn-primary" id="absSave">حفظ</button>
+      <div id="absFormView">
+        <h3>تقرير القسم الأسبوعي</h3>
+        ${isFullEditor ? `
+        <div class="field"><label>القسم</label>
+          <select id="absDept">${state.departments.map(d=>`<option value="${d.id}">${d.name}</option>`).join('')}</select>
+        </div>` : ''}
+        <div id="absRowsContainer">${absenceMemberTemplate(0)}</div>
+        <button type="button" class="btn-text" id="absAddRow">+ إضافة عضو آخر</button>
+        <div class="field" style="margin-top:14px;"><label>مرئيات رئيس القسم بشأن التقرير <span class="required-mark">*</span></label><textarea id="absNotes"></textarea></div>
+        <p class="login-error hidden" id="absErr"></p>
+        <div class="modal-actions">
+          <button class="btn-ghost" id="absCancel">إلغاء</button>
+          <button class="btn-primary" id="absSave">حفظ</button>
+        </div>
       </div>
+      <div id="absReviewView" class="hidden"></div>
     </div>`;
 
   const rowsContainer = document.getElementById('absRowsContainer');
 
-  function rebindRemoveButtons(){
-    rowsContainer.querySelectorAll('.abs-row-remove').forEach(btn=>{
+  function rebindLectureButtons(lecturesContainer){
+    lecturesContainer.querySelectorAll('.abs-lecture-remove').forEach(btn=>{
       btn.onclick = ()=>{
-        if(rowsContainer.querySelectorAll('.abs-row').length <= 1) return;
-        btn.closest('.abs-row').remove();
+        if(lecturesContainer.querySelectorAll('.abs-lecture').length <= 1) return;
+        btn.closest('.abs-lecture').remove();
       };
     });
+    lecturesContainer.querySelectorAll('.absDate').forEach(dateInput=>{
+      const hint = dateInput.closest('.field').querySelector('.abs-hijri-hint');
+      if(!hint || dateInput.dataset.hijriBound) return;
+      dateInput.dataset.hijriBound = '1';
+      dateInput.addEventListener('input', ()=>{
+        hint.textContent = dateInput.value ? hijriDate(dateInput.value) : '';
+      });
+    });
   }
-  rebindRemoveButtons();
+
+  function rebindMemberButtons(){
+    rowsContainer.querySelectorAll('.abs-member-remove').forEach(btn=>{
+      btn.onclick = ()=>{
+        if(rowsContainer.querySelectorAll('.abs-member').length <= 1) return;
+        btn.closest('.abs-member').remove();
+      };
+    });
+    rowsContainer.querySelectorAll('.abs-add-lecture').forEach(btn=>{
+      btn.onclick = ()=>{
+        const lecturesContainer = btn.closest('.abs-member').querySelector('.abs-lectures');
+        lecturesContainer.insertAdjacentHTML('beforeend', absenceLectureTemplate());
+        rebindLectureButtons(lecturesContainer);
+      };
+    });
+    rowsContainer.querySelectorAll('.abs-lectures').forEach(rebindLectureButtons);
+  }
+  rebindMemberButtons();
 
   document.getElementById('absAddRow').onclick = ()=>{
-    rowCount++;
-    rowsContainer.insertAdjacentHTML('beforeend', absenceRowTemplate(rowCount - 1));
-    rebindRemoveButtons();
+    memberCount++;
+    rowsContainer.insertAdjacentHTML('beforeend', absenceMemberTemplate(memberCount - 1));
+    rebindMemberButtons();
   };
 
   document.getElementById('absCancel').onclick = closeModal;
-  document.getElementById('absSave').onclick = async ()=>{
+
+  document.getElementById('absSave').onclick = ()=>{
     const deptId = isFullEditor ? document.getElementById('absDept').value : state.currentUser.department_id;
     const errEl = document.getElementById('absErr');
     errEl.classList.add('hidden');
@@ -1697,64 +1772,132 @@ function openAddAbsenceModal(){
       return;
     }
 
-    const rowEls = [...rowsContainer.querySelectorAll('.abs-row')];
-    const filledRows = rowEls.filter(rowEl => rowEl.querySelector('.absFaculty').value.trim());
+    const memberEls = [...rowsContainer.querySelectorAll('.abs-member')];
+    const filledMembers = memberEls.filter(m => m.querySelector('.absFaculty').value.trim());
 
-    if(filledRows.length === 0){
+    if(filledMembers.length === 0){
       errEl.textContent = 'لازم تعبّي اسم عضو هيئة تدريس وحد على الأقل.';
       errEl.classList.remove('hidden');
       return;
     }
 
-    for(const rowEl of filledRows){
-      const absType = rowEl.querySelector('.absType').value;
-      if(absType === 'بعذر' && rowEl.querySelector('.absFile').files.length === 0){
-        errEl.textContent = 'مستند الغياب إلزامي لحالة "بعذر" — ارفع ملف العذر قبل الحفظ.';
-        errEl.classList.remove('hidden');
+    for(const memberEl of filledMembers){
+      for(const lecEl of memberEl.querySelectorAll('.abs-lecture')){
+        const absType = lecEl.querySelector('.absType').value;
+        if(absType === 'بعذر' && lecEl.querySelector('.absFile').files.length === 0){
+          errEl.textContent = 'مستند الغياب إلزامي لحالة "بعذر" — ارفع ملف العذر قبل الحفظ.';
+          errEl.classList.remove('hidden');
+          return;
+        }
+      }
+    }
+
+    const plan = [];
+    filledMembers.forEach(memberEl=>{
+      const facultyName = memberEl.querySelector('.absFaculty').value.trim();
+      memberEl.querySelectorAll('.abs-lecture').forEach(lecEl=>{
+        const fileInput = lecEl.querySelector('.absFile');
+        plan.push({
+          facultyName,
+          course: lecEl.querySelector('.absCourse').value || '—',
+          section: lecEl.querySelector('.absSection').value || '—',
+          date: lecEl.querySelector('.absDate').value || '',
+          time: lecEl.querySelector('.absTime').value || '—',
+          room: lecEl.querySelector('.absRoom').value || '—',
+          type: lecEl.querySelector('.absType').value,
+          fileName: fileInput.files.length > 0 ? fileInput.files[0].name : null
+        });
+      });
+    });
+
+    showAbsReview(plan, sharedNotes, deptId);
+  };
+
+  function showAbsReview(plan, sharedNotes, deptId){
+    document.getElementById('absFormView').classList.add('hidden');
+    const reviewView = document.getElementById('absReviewView');
+    reviewView.classList.remove('hidden');
+    reviewView.innerHTML = `
+      <h3>مراجعة التقرير قبل الإرسال</h3>
+      <p style="color:var(--ink-soft);font-size:13px;margin-top:-6px;">راجع البيانات التالية جيدًا. يمكنك الرجوع للتعديل قبل الإرسال النهائي.</p>
+      <div class="abs-review-list">
+        ${plan.map((p, i)=>`
+          <div class="abs-review-item">
+            <div class="abs-review-item-head">
+              <span>${i+1}. ${escapeHtml(p.facultyName)}</span>
+              <span class="tag ${p.type === 'بعذر' ? 'tag-ok' : 'tag-warn'}">${p.type}</span>
+            </div>
+            <div class="abs-review-grid">
+              <span><b>المادة:</b> ${escapeHtml(p.course)}</span>
+              <span><b>الشعبة:</b> ${escapeHtml(p.section)}</span>
+              <span><b>التاريخ:</b> ${dualDateLabel(p.date)}</span>
+              <span><b>الوقت:</b> ${escapeHtml(p.time)}</span>
+              <span><b>القاعة:</b> ${escapeHtml(p.room)}</span>
+              <span><b>المستند:</b> ${p.fileName ? '📎 ' + escapeHtml(p.fileName) : '—'}</span>
+            </div>
+          </div>`).join('')}
+      </div>
+      <div class="field" style="margin-top:14px;"><label>مرئيات رئيس القسم بشأن التقرير</label><div class="abs-review-notes">${escapeHtml(sharedNotes)}</div></div>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="absBack">⬅ رجوع للتعديل</button>
+        <button class="btn-primary" id="absConfirm">✅ تأكيد الإرسال</button>
+      </div>`;
+
+    document.getElementById('absBack').onclick = ()=>{
+      reviewView.classList.add('hidden');
+      reviewView.innerHTML = '';
+      document.getElementById('absFormView').classList.remove('hidden');
+    };
+
+    document.getElementById('absConfirm').onclick = async ()=>{
+      const confirmBtn = document.getElementById('absConfirm');
+      const backBtn = document.getElementById('absBack');
+      confirmBtn.disabled = true;
+      backBtn.disabled = true;
+      confirmBtn.textContent = 'جارٍ الحفظ...';
+
+      const entries = [];
+      const memberEls2 = [...rowsContainer.querySelectorAll('.abs-member')].filter(m => m.querySelector('.absFaculty').value.trim());
+
+      for(const memberEl of memberEls2){
+        const facultyName = memberEl.querySelector('.absFaculty').value.trim();
+        for(const lecEl of memberEl.querySelectorAll('.abs-lecture')){
+          let documentPath = null;
+          let documentName = null;
+          const fileInput = lecEl.querySelector('.absFile');
+          if(fileInput.files.length > 0){
+            const file = fileInput.files[0];
+            const path = `${deptId}/${Date.now()}_${sanitizeFileName(file.name)}`;
+            const { error: uploadError } = await sb.storage.from('absence-documents').upload(path, file);
+            if(!uploadError){ documentPath = path; documentName = file.name; }
+          }
+
+          entries.push({
+            department_id: deptId,
+            faculty_name: facultyName,
+            course_name: lecEl.querySelector('.absCourse').value || null,
+            section_number: lecEl.querySelector('.absSection').value || null,
+            absence_date: lecEl.querySelector('.absDate').value || null,
+            absence_time: lecEl.querySelector('.absTime').value || null,
+            room: lecEl.querySelector('.absRoom').value || null,
+            absence_type: lecEl.querySelector('.absType').value,
+            document_path: documentPath,
+            document_name: documentName,
+            head_notes: sharedNotes
+          });
+        }
+      }
+
+      if(entries.length === 0){
+        closeModal();
         return;
       }
-    }
 
-    const entries = [];
-
-    for(const rowEl of filledRows){
-      const facultyName = rowEl.querySelector('.absFaculty').value.trim();
-
-      let documentPath = null;
-      let documentName = null;
-      const fileInput = rowEl.querySelector('.absFile');
-      if(fileInput.files.length > 0){
-        const file = fileInput.files[0];
-        const path = `${deptId}/${Date.now()}_${sanitizeFileName(file.name)}`;
-        const { error: uploadError } = await sb.storage.from('absence-documents').upload(path, file);
-        if(!uploadError){ documentPath = path; documentName = file.name; }
-      }
-
-      entries.push({
-        department_id: deptId,
-        faculty_name: facultyName,
-        course_name: rowEl.querySelector('.absCourse').value || null,
-        section_number: rowEl.querySelector('.absSection').value || null,
-        absence_date: rowEl.querySelector('.absDate').value || null,
-        absence_time: rowEl.querySelector('.absTime').value || null,
-        room: rowEl.querySelector('.absRoom').value || null,
-        absence_type: rowEl.querySelector('.absType').value,
-        document_path: documentPath,
-        document_name: documentName,
-        head_notes: sharedNotes
-      });
-    }
-
-    if(entries.length === 0){
-      errEl.textContent = 'لازم تعبّي اسم عضو هيئة تدريس وحد على الأقل.';
-      errEl.classList.remove('hidden');
-      return;
-    }
-
-    await sb.from('faculty_absences').insert(entries);
-    closeModal();
-    await loadAll();
-  };
+      await sb.from('faculty_absences').insert(entries);
+      closeModal();
+      await loadAll();
+    };
+  }
 }
 
 
@@ -2269,7 +2412,7 @@ async function generatePendingDecisionsSummary(){
   const rowHtml = item => `
     <tr>
       <td style="text-align:right;font-weight:700;">${escapeHtml(item.faculty_name || '—')}${item.course_name ? ` <span style="font-weight:400;color:var(--ink-soft);">— ${escapeHtml(item.course_name)}</span>` : ''}</td>
-      <td>${item.date || '—'}</td>
+      <td>${dualDateLabel(item.date)}</td>
       <td><span class="tag ${item.typeClass}">${item.typeLabel}</span></td>
       <td>${item.document_url ? `<a href="${item.document_url}" target="_blank" class="doc-link">📎 ${escapeHtml(item.document_name || 'عرض المستند')}</a>` : (item.document_path ? '📎 —' : '—')}</td>
       <td style="text-align:right;color:var(--ink-soft);">${item.head_notes ? escapeHtml(item.head_notes.slice(0,80)) + (item.head_notes.length>80?'…':'') : '—'}</td>
@@ -2349,6 +2492,7 @@ async function generatePendingDecisionsSummary(){
   .tag-info{background:var(--teal-tint);color:var(--teal);}
   .doc-link{color:var(--seal-dark);font-weight:600;text-decoration:none;white-space:nowrap;}
   .doc-link:hover{text-decoration:underline;color:var(--teal);}
+  .hijri-inline{font-size:11px;color:var(--ink-soft);white-space:nowrap;}
   .empty-note{color:var(--ink-soft);font-size:14px;text-align:center;padding:30px;background:var(--paper);border-radius:6px;}
   .report-footer{
     margin-top:32px;padding-top:16px;border-top:2px solid var(--line);
@@ -2482,6 +2626,7 @@ function generatePeriodReport(start, end, deptId){
   table.reports-tbl tbody tr:nth-child(even){background:#EAF7F5;}
   table.absences-tbl tbody tr.row-excused{background:var(--green-tint);}
   table.absences-tbl tbody tr.row-unexcused{background:var(--redd-tint);}
+  .hijri-inline{font-size:11px;color:var(--ink-soft);white-space:nowrap;display:block;}
   .dept-breakdown{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;}
   .dept-chip{
     background:var(--green);color:#fff;padding:7px 16px;border-radius:20px;
@@ -2570,7 +2715,7 @@ function generatePeriodReport(start, end, deptId){
             <tr class="${a.absence_type === 'بعذر' ? 'row-excused' : 'row-unexcused'}">
               <td>${escapeHtml(a.faculty_name)}</td>
               <td>${escapeHtml(a.course_name || '—')}</td>
-              <td>${a.absence_date || '—'}</td>
+              <td>${dualDateLabel(a.absence_date)}</td>
               <td>${escapeHtml(a.absence_time || '—')}</td>
               <td>${escapeHtml(a.absence_type || '—')}</td>
             </tr>`).join('')}
@@ -2592,7 +2737,7 @@ function generatePeriodReport(start, end, deptId){
                   <tr class="${a.absence_type === 'بعذر' ? 'row-excused' : 'row-unexcused'}">
                     <td>${escapeHtml(a.faculty_name)}</td>
                     <td>${escapeHtml(a.course_name || '—')}</td>
-                    <td>${a.absence_date || '—'}</td>
+                    <td>${dualDateLabel(a.absence_date)}</td>
                     <td>${escapeHtml(a.absence_time || '—')}</td>
                     <td>${escapeHtml(a.absence_type || '—')}</td>
                   </tr>`).join('')}
