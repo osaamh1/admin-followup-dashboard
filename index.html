@@ -1200,6 +1200,18 @@ function dualDateLabel(isoStr){
   return h ? `${isoStr} <span class="hijri-inline">(${h})</span>` : isoStr;
 }
 
+// يرقّم عناوين المحاضرات داخل مجموعة عضو واحد: المحاضرة الأولى، الثانية، إلخ
+const ORDINAL_AR = ['الأولى','الثانية','الثالثة','الرابعة','الخامسة','السادسة','السابعة','الثامنة','التاسعة','العاشرة'];
+function ordinalLectureLabel(n){
+  return ORDINAL_AR[n-1] ? `المحاضرة ${ORDINAL_AR[n-1]}` : `المحاضرة رقم ${n}`;
+}
+function renumberLectures(lecturesContainer){
+  lecturesContainer.querySelectorAll('.abs-lecture').forEach((lecEl, i)=>{
+    const title = lecEl.querySelector('.abs-lecture-title');
+    if(title) title.textContent = ordinalLectureLabel(i + 1);
+  });
+}
+
 function renderDeptChart(){
   const panel = document.getElementById('deptChartPanel');
   const role = state.currentUser.role;
@@ -1565,6 +1577,7 @@ function openAddRemoteModal(){
       btn.onclick = ()=>{
         if(lecturesContainer.querySelectorAll('.abs-lecture').length <= 1) return;
         btn.closest('.abs-lecture').remove();
+        renumberLectures(lecturesContainer);
       };
     });
     lecturesContainer.querySelectorAll('.remDate').forEach(dateInput=>{
@@ -1575,6 +1588,7 @@ function openAddRemoteModal(){
         hint.textContent = dateInput.value ? hijriDate(dateInput.value) : '';
       });
     });
+    renumberLectures(lecturesContainer);
   }
 
   function rebindMemberButtons(){
@@ -1758,6 +1772,7 @@ function openAddAbsenceModal(){
       btn.onclick = ()=>{
         if(lecturesContainer.querySelectorAll('.abs-lecture').length <= 1) return;
         btn.closest('.abs-lecture').remove();
+        renumberLectures(lecturesContainer);
       };
     });
     lecturesContainer.querySelectorAll('.absDate').forEach(dateInput=>{
@@ -1768,6 +1783,7 @@ function openAddAbsenceModal(){
         hint.textContent = dateInput.value ? hijriDate(dateInput.value) : '';
       });
     });
+    renumberLectures(lecturesContainer);
   }
 
   function rebindMemberButtons(){
