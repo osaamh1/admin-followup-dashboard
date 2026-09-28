@@ -2215,7 +2215,7 @@ function openGenerateReportModal(){
 // ملخص مبسّط للعرض على فضيلة العميد: كل الطلبات
 // (غياب / تحويل محاضرة) اللي لسه تحتاج قرار، بأقل تفاصيل ممكنة.
 // ============================================
-function generatePendingDecisionsSummary(){
+async function generatePendingDecisionsSummary(){
   const pendingAbsences = state.absences.filter(isPendingItem).map(a => ({
     type: 'absence',
     department_id: a.department_id,
@@ -2224,7 +2224,10 @@ function generatePendingDecisionsSummary(){
     date: a.absence_date,
     typeLabel: a.absence_type === 'بعذر' ? 'غياب بعذر' : 'غياب بدون عذر',
     typeClass: a.absence_type === 'بعذر' ? 'tag-ok' : 'tag-warn',
-    head_notes: a.head_notes
+    head_notes: a.head_notes,
+    document_path: a.document_path,
+    document_name: a.document_name,
+    document_url: null
   }));
   const pendingRemote = state.remoteRequests.filter(isPendingItem).map(r => ({
     type: 'remote',
@@ -2234,10 +2237,21 @@ function generatePendingDecisionsSummary(){
     date: r.lecture_date,
     typeLabel: 'طلب تحويل لعن بعد',
     typeClass: 'tag-info',
-    head_notes: r.head_notes
+    head_notes: r.head_notes,
+    document_path: null,
+    document_name: null,
+    document_url: null
   }));
 
   const all = [...pendingAbsences, ...pendingRemote];
+
+  // نجهّز روابط المرفقات (المستندات) قبل فتح التقرير حتى تكون جاهزة للنقر مباشرة
+  await Promise.all(all.filter(i => i.document_path).map(async (i) => {
+    try {
+      const { data, error } = await sb.storage.from('absence-documents').createSignedUrl(i.document_path, 3600);
+      if(!error && data) i.document_url = data.signedUrl;
+    } catch(e){ /* تجاهل، يبقى بدون رابط */ }
+  }));
 
   const byDept = new Map();
   all.forEach(item=>{
@@ -2254,6 +2268,7 @@ function generatePendingDecisionsSummary(){
       <td style="text-align:right;font-weight:700;">${escapeHtml(item.faculty_name || '—')}${item.course_name ? ` <span style="font-weight:400;color:var(--ink-soft);">— ${escapeHtml(item.course_name)}</span>` : ''}</td>
       <td>${item.date || '—'}</td>
       <td><span class="tag ${item.typeClass}">${item.typeLabel}</span></td>
+      <td>${item.document_url ? `<a href="${item.document_url}" target="_blank" class="doc-link">📎 ${escapeHtml(item.document_name || 'عرض المستند')}</a>` : (item.document_path ? '📎 —' : '—')}</td>
       <td style="text-align:right;color:var(--ink-soft);">${item.head_notes ? escapeHtml(item.head_notes.slice(0,80)) + (item.head_notes.length>80?'…':'') : '—'}</td>
     </tr>`;
 
@@ -2266,7 +2281,7 @@ function generatePendingDecisionsSummary(){
       <div class="dept-block">
         <div class="dept-block-head"><span>${escapeHtml(name)}</span><span class="dept-block-count">${items.length}</span></div>
         <table>
-          <thead><tr><th>عضو هيئة التدريس</th><th>التاريخ</th><th>نوع الطلب</th><th>مرئيات رئيس القسم</th></tr></thead>
+          <thead><tr><th>عضو هيئة التدريس</th><th>التاريخ</th><th>نوع الطلب</th><th>المرفق</th><th>مرئيات رئيس القسم</th></tr></thead>
           <tbody>${items.map(rowHtml).join('')}</tbody>
         </table>
       </div>`;
@@ -2329,6 +2344,8 @@ function generatePendingDecisionsSummary(){
   .tag-ok{background:var(--green-tint);color:var(--green);}
   .tag-warn{background:var(--redd-tint);color:var(--redd);}
   .tag-info{background:var(--teal-tint);color:var(--teal);}
+  .doc-link{color:var(--seal-dark);font-weight:600;text-decoration:none;white-space:nowrap;}
+  .doc-link:hover{text-decoration:underline;color:var(--teal);}
   .empty-note{color:var(--ink-soft);font-size:14px;text-align:center;padding:30px;background:var(--paper);border-radius:6px;}
   .report-footer{
     margin-top:32px;padding-top:16px;border-top:2px solid var(--line);
