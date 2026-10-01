@@ -467,6 +467,15 @@
     border-radius:var(--radius);transition:width .5s ease;min-width:2px;
   }
   .chart-value{width:26px;text-align:center;font-weight:700;color:var(--seal-dark);font-size:14px;flex-shrink:0;}
+  .storage-usage-panel{margin-bottom:22px;}
+  .storage-usage-grid{display:flex;gap:16px;padding:18px;flex-wrap:wrap;}
+  .storage-usage-tile{
+    flex:1;min-width:140px;background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px;display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;
+  }
+  .storage-usage-value{font-size:22px;font-weight:800;color:var(--seal-dark);}
+  .storage-usage-label{font-size:12.5px;color:var(--ink-soft);}
+  .storage-usage-note{padding:0 18px 16px;font-size:12px;color:var(--ink-soft);margin:0;}
 </style>
 </head>
 <body>
@@ -743,6 +752,7 @@ async function loadAll(){
   renderDeptFilter();
   // renderWeeklyPanel(); // تم إخفاء خدمة "تقارير داعمة" من الواجهة (البيانات محفوظة، يمكن إعادة تفعيلها لاحقًا)
   renderDeptChart();
+  renderStorageUsage();
   renderAbsences();
   renderRemoteRequests();
   renderServicesArchive();
@@ -800,6 +810,8 @@ function renderShell(){
       <section class="stat-strip" id="statStrip"></section>
 
       <section class="panel dept-chart-panel hidden" id="deptChartPanel"></section>
+
+      <section class="panel storage-usage-panel hidden" id="storageUsagePanel"></section>
 
       <section class="panel absences-panel" id="absencesPanel"></section>
 
@@ -1272,6 +1284,67 @@ function renderDeptChart(){
       }
     </div>
   `;
+}
+
+// مؤشر تقريبي لاستخدام مساحة التخزين (مرفقات الغياب) — يظهر فقط لحساب الآدمن
+async function renderStorageUsage(){
+  const panel = document.getElementById('storageUsagePanel');
+  if(!panel) return;
+
+  if(state.currentUser.role !== 'admin'){
+    panel.classList.add('hidden');
+    panel.innerHTML = '';
+    return;
+  }
+
+  panel.classList.remove('hidden');
+  panel.innerHTML = `
+    <div class="panel-head"><h2>📦 استخدام مساحة المرفقات (تقريبي)</h2></div>
+    <div id="storageUsageBody"><div class="empty-note">جارٍ الحساب...</div></div>`;
+
+  try{
+    let totalFiles = 0;
+    let totalBytes = 0;
+
+    const { data: topLevel, error: topErr } = await sb.storage.from('absence-documents').list('', { limit: 1000 });
+    if(topErr) throw topErr;
+
+    for(const entry of (topLevel || [])){
+      if(entry.id === null){
+        // مجلد قسم — نستعرض الملفات بداخله
+        const { data: files } = await sb.storage.from('absence-documents').list(entry.name, { limit: 1000 });
+        (files || []).forEach(f=>{
+          if(f.id !== null){
+            totalFiles++;
+            totalBytes += (f.metadata && f.metadata.size) ? f.metadata.size : 0;
+          }
+        });
+      } else {
+        totalFiles++;
+        totalBytes += (entry.metadata && entry.metadata.size) ? entry.metadata.size : 0;
+      }
+    }
+
+    const mb = (totalBytes / (1024 * 1024)).toFixed(2);
+    const bodyEl = document.getElementById('storageUsageBody');
+    if(bodyEl){
+      bodyEl.innerHTML = `
+        <div class="storage-usage-grid">
+          <div class="storage-usage-tile">
+            <span class="storage-usage-value">${totalFiles}</span>
+            <span class="storage-usage-label">عدد المرفقات</span>
+          </div>
+          <div class="storage-usage-tile">
+            <span class="storage-usage-value">${mb} MB</span>
+            <span class="storage-usage-label">الحجم التقريبي</span>
+          </div>
+        </div>
+        <p class="storage-usage-note">رقم تقريبي من ملفات مستندات الغياب فقط (لا يشمل باقي استخدام قاعدة البيانات). للرقم الدقيق والموثوق لكامل الخطة، راجع لوحة Supabase ← Project Settings ← Usage.</p>`;
+    }
+  }catch(e){
+    const bodyEl = document.getElementById('storageUsageBody');
+    if(bodyEl) bodyEl.innerHTML = `<div class="empty-note">تعذر حساب استخدام المساحة حاليًا.</div>`;
+  }
 }
 
 // مجموعة أدوات مشتركة لبناء "قائمة الأقسام المنسدلة" (Accordion) مع نقطة نابضة
@@ -1780,12 +1853,12 @@ function absenceLectureTemplate(){
         <button type="button" class="abs-lecture-remove">🗑 حذف المحاضرة</button>
       </div>
       <div class="field"><label>اسم المادة <span class="required-mark">*</span></label><input class="absCourse" type="text"></div>
-      <div class="field"><label>رقم الشعبة</label><input class="absSection" type="text"></div>
+      <div class="field"><label>رقم الشعبة <span class="required-mark">*</span></label><input class="absSection" type="text"></div>
       <div class="field"><label>تاريخ الغياب <span class="required-mark">*</span></label><input class="absDate" type="date"><div class="abs-hijri-hint"></div></div>
       <div class="field"><label>الوقت <span class="required-mark">*</span></label>
         <select class="absTime"><option value="">— اختر الوقت —</option>${timeOpts}</select>
       </div>
-      <div class="field"><label>القاعة</label><input class="absRoom" type="text"></div>
+      <div class="field"><label>القاعة <span class="required-mark">*</span></label><input class="absRoom" type="text"></div>
       <div class="field"><label>نوع الغياب</label>
         <select class="absType"><option value="بعذر">بعذر</option><option value="بدون عذر">بدون عذر</option></select>
       </div>
@@ -1921,6 +1994,16 @@ function openAddAbsenceModal(){
         }
         if(!lecEl.querySelector('.absTime').value){
           errEl.textContent = `لازم تحدد وقت المحاضرة لكل محاضرة — ناقص عند العضو "${facultyName}".`;
+          errEl.classList.remove('hidden');
+          return;
+        }
+        if(!lecEl.querySelector('.absSection').value.trim()){
+          errEl.textContent = `لازم تكتب رقم الشعبة لكل محاضرة — ناقص عند العضو "${facultyName}".`;
+          errEl.classList.remove('hidden');
+          return;
+        }
+        if(!lecEl.querySelector('.absRoom').value.trim()){
+          errEl.textContent = `لازم تكتب القاعة لكل محاضرة — ناقصة عند العضو "${facultyName}".`;
           errEl.classList.remove('hidden');
           return;
         }
