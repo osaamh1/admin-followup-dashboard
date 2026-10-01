@@ -1212,6 +1212,35 @@ function renumberLectures(lecturesContainer){
   });
 }
 
+// توحيد النص للمقارنة (حذف الفراغات الزائدة) لاستخدامه في فحص التكرار
+function normText(s){
+  return (s || '').toString().trim().replace(/\s+/g, ' ');
+}
+
+// يبحث عن طلب غياب مطابق مسجّل مسبقًا لنفس العضو/المادة/التاريخ/الوقت في نفس القسم
+function findDuplicateAbsence(deptId, facultyName, courseName, date, time){
+  return state.absences.find(a =>
+    a.department_id === deptId &&
+    normText(a.faculty_name) === normText(facultyName) &&
+    normText(a.course_name) === normText(courseName) &&
+    (a.absence_date || '') === (date || '') &&
+    normText(a.absence_time) === normText(time) &&
+    a.status !== 'مرفوض'
+  );
+}
+
+// يبحث عن طلب تحويل مطابق مسجّل مسبقًا لنفس العضو/المادة/التاريخ/الوقت في نفس القسم
+function findDuplicateRemote(deptId, facultyName, courseName, date, time){
+  return state.remoteRequests.find(r =>
+    r.department_id === deptId &&
+    normText(r.faculty_name) === normText(facultyName) &&
+    normText(r.course_name) === normText(courseName) &&
+    (r.lecture_date || '') === (date || '') &&
+    normText(r.lecture_time) === normText(time) &&
+    r.status !== 'مرفوض'
+  );
+}
+
 function renderDeptChart(){
   const panel = document.getElementById('deptChartPanel');
   const role = state.currentUser.role;
@@ -1654,6 +1683,7 @@ function openAddRemoteModal(){
 
     const today = new Date().toISOString().slice(0,10);
     const entries = [];
+    const seenKeysRem = new Set();
 
     for(const memberEl of filledMembers){
       const facultyName = memberEl.querySelector('.remFaculty').value.trim();
@@ -1664,12 +1694,29 @@ function openAddRemoteModal(){
           errEl.classList.remove('hidden');
           return;
         }
+
+        const courseName = lecEl.querySelector('.remCourse').value || null;
+        const lectureTime = lecEl.querySelector('.remTime').value || null;
+        const dupKey = `${normText(facultyName)}|${normText(courseName)}|${lectureDate || ''}|${normText(lectureTime)}`;
+        if(seenKeysRem.has(dupKey)){
+          errEl.textContent = `يوجد تكرار داخل نفس الطلب لعضو "${facultyName}" — تحقق من المحاضرات المدخلة (نفس المادة والتاريخ والوقت).`;
+          errEl.classList.remove('hidden');
+          return;
+        }
+        seenKeysRem.add(dupKey);
+        const dup = findDuplicateRemote(deptId, facultyName, courseName, lectureDate, lectureTime);
+        if(dup){
+          errEl.textContent = `يوجد طلب تحويل مسجّل مسبقًا لنفس العضو "${facultyName}" بنفس المادة والتاريخ والوقت — لا يمكن تكرار نفس الطلب.`;
+          errEl.classList.remove('hidden');
+          return;
+        }
+
         entries.push({
           department_id: deptId,
           faculty_name: facultyName,
-          course_name: lecEl.querySelector('.remCourse').value || null,
+          course_name: courseName,
           lecture_date: lectureDate,
-          lecture_time: lecEl.querySelector('.remTime').value || null,
+          lecture_time: lectureTime,
           justification: lecEl.querySelector('.remJustification').value.trim(),
           head_notes: sharedNotes
         });
@@ -1681,6 +1728,11 @@ function openAddRemoteModal(){
       errEl.classList.remove('hidden');
       return;
     }
+
+    const saveBtn = document.getElementById('remSave');
+    if(saveBtn.disabled) return; // يمنع الإرسال المزدوج عند الضغط أكثر من مرة
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'جارٍ الحفظ...';
 
     await sb.from('remote_lecture_requests').insert(entries);
     closeModal();
@@ -1850,22 +1902,41 @@ function openAddAbsenceModal(){
     }
 
     const plan = [];
-    filledMembers.forEach(memberEl=>{
+    const seenKeysAbs = new Set();
+    for(const memberEl of filledMembers){
       const facultyName = memberEl.querySelector('.absFaculty').value.trim();
-      memberEl.querySelectorAll('.abs-lecture').forEach(lecEl=>{
+      for(const lecEl of memberEl.querySelectorAll('.abs-lecture')){
         const fileInput = lecEl.querySelector('.absFile');
+        const course = lecEl.querySelector('.absCourse').value || '';
+        const date = lecEl.querySelector('.absDate').value || '';
+        const time = lecEl.querySelector('.absTime').value || '';
+
+        const dupKey = `${normText(facultyName)}|${normText(course)}|${date}|${normText(time)}`;
+        if(seenKeysAbs.has(dupKey)){
+          errEl.textContent = `يوجد تكرار داخل نفس التقرير لعضو "${facultyName}" — تحقق من المحاضرات المدخلة (نفس المادة والتاريخ والوقت).`;
+          errEl.classList.remove('hidden');
+          return;
+        }
+        seenKeysAbs.add(dupKey);
+        const dup = findDuplicateAbsence(deptId, facultyName, course, date, time);
+        if(dup){
+          errEl.textContent = `يوجد تقرير غياب مسجّل مسبقًا لنفس العضو "${facultyName}" بنفس المادة والتاريخ والوقت — لا يمكن تكرار نفس التقرير.`;
+          errEl.classList.remove('hidden');
+          return;
+        }
+
         plan.push({
           facultyName,
-          course: lecEl.querySelector('.absCourse').value || '—',
-          section: lecEl.querySelector('.absSection').value || '—',
-          date: lecEl.querySelector('.absDate').value || '',
-          time: lecEl.querySelector('.absTime').value || '—',
-          room: lecEl.querySelector('.absRoom').value || '—',
+          course,
+          section: lecEl.querySelector('.absSection').value || '',
+          date,
+          time,
+          room: lecEl.querySelector('.absRoom').value || '',
           type: lecEl.querySelector('.absType').value,
           fileName: fileInput.files.length > 0 ? fileInput.files[0].name : null
         });
-      });
-    });
+      }
+    }
 
     showAbsReview(plan, sharedNotes, deptId);
   };
@@ -1885,11 +1956,11 @@ function openAddAbsenceModal(){
               <span class="tag ${p.type === 'بعذر' ? 'tag-ok' : 'tag-warn'}">${p.type}</span>
             </div>
             <div class="abs-review-grid">
-              <span><b>المادة:</b> ${escapeHtml(p.course)}</span>
-              <span><b>الشعبة:</b> ${escapeHtml(p.section)}</span>
+              <span><b>المادة:</b> ${escapeHtml(p.course || '—')}</span>
+              <span><b>الشعبة:</b> ${escapeHtml(p.section || '—')}</span>
               <span><b>التاريخ:</b> ${dualDateLabel(p.date)}</span>
-              <span><b>الوقت:</b> ${escapeHtml(p.time)}</span>
-              <span><b>القاعة:</b> ${escapeHtml(p.room)}</span>
+              <span><b>الوقت:</b> ${escapeHtml(p.time || '—')}</span>
+              <span><b>القاعة:</b> ${escapeHtml(p.room || '—')}</span>
               <span><b>المستند:</b> ${p.fileName ? '📎 ' + escapeHtml(p.fileName) : '—'}</span>
             </div>
           </div>`).join('')}
