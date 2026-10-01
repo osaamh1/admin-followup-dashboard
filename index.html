@@ -1553,9 +1553,9 @@ function remoteLectureTemplate(){
         <span class="abs-lecture-title">محاضرة</span>
         <button type="button" class="abs-lecture-remove">🗑 حذف المحاضرة</button>
       </div>
-      <div class="field"><label>اسم المادة</label><input class="remCourse" type="text"></div>
-      <div class="field"><label>تاريخ المحاضرة</label><input class="remDate" type="date" min="${today}"><div class="abs-hijri-hint"></div></div>
-      <div class="field"><label>الوقت</label>
+      <div class="field"><label>اسم المادة <span class="required-mark">*</span></label><input class="remCourse" type="text"></div>
+      <div class="field"><label>تاريخ المحاضرة <span class="required-mark">*</span></label><input class="remDate" type="date" min="${today}"><div class="abs-hijri-hint"></div></div>
+      <div class="field"><label>الوقت <span class="required-mark">*</span></label>
         <select class="remTime"><option value="">— اختر الوقت —</option>${timeOpts}</select>
       </div>
       <div class="field"><label>مسوغات الطلب <span class="required-mark">*</span></label><textarea class="remJustification"></textarea></div>
@@ -1672,7 +1672,23 @@ function openAddRemoteModal(){
     }
 
     for(const memberEl of filledMembers){
+      const facultyName = memberEl.querySelector('.remFaculty').value.trim();
       for(const lecEl of memberEl.querySelectorAll('.abs-lecture')){
+        if(!lecEl.querySelector('.remCourse').value.trim()){
+          errEl.textContent = `لازم تكتب اسم المادة لكل محاضرة — ناقصة عند العضو "${facultyName}".`;
+          errEl.classList.remove('hidden');
+          return;
+        }
+        if(!lecEl.querySelector('.remDate').value){
+          errEl.textContent = `لازم تحدد تاريخ المحاضرة لكل محاضرة — ناقص عند العضو "${facultyName}".`;
+          errEl.classList.remove('hidden');
+          return;
+        }
+        if(!lecEl.querySelector('.remTime').value){
+          errEl.textContent = `لازم تحدد وقت المحاضرة لكل محاضرة — ناقص عند العضو "${facultyName}".`;
+          errEl.classList.remove('hidden');
+          return;
+        }
         if(!lecEl.querySelector('.remJustification').value.trim()){
           errEl.textContent = 'مسوغات الطلب إلزامية لكل محاضرة مسجّلة.';
           errEl.classList.remove('hidden');
@@ -1763,10 +1779,10 @@ function absenceLectureTemplate(){
         <span class="abs-lecture-title">محاضرة</span>
         <button type="button" class="abs-lecture-remove">🗑 حذف المحاضرة</button>
       </div>
-      <div class="field"><label>اسم المادة</label><input class="absCourse" type="text"></div>
+      <div class="field"><label>اسم المادة <span class="required-mark">*</span></label><input class="absCourse" type="text"></div>
       <div class="field"><label>رقم الشعبة</label><input class="absSection" type="text"></div>
-      <div class="field"><label>تاريخ الغياب</label><input class="absDate" type="date"><div class="abs-hijri-hint"></div></div>
-      <div class="field"><label>الوقت</label>
+      <div class="field"><label>تاريخ الغياب <span class="required-mark">*</span></label><input class="absDate" type="date"><div class="abs-hijri-hint"></div></div>
+      <div class="field"><label>الوقت <span class="required-mark">*</span></label>
         <select class="absTime"><option value="">— اختر الوقت —</option>${timeOpts}</select>
       </div>
       <div class="field"><label>القاعة</label><input class="absRoom" type="text"></div>
@@ -1891,7 +1907,23 @@ function openAddAbsenceModal(){
     }
 
     for(const memberEl of filledMembers){
+      const facultyName = memberEl.querySelector('.absFaculty').value.trim();
       for(const lecEl of memberEl.querySelectorAll('.abs-lecture')){
+        if(!lecEl.querySelector('.absCourse').value.trim()){
+          errEl.textContent = `لازم تكتب اسم المادة لكل محاضرة — ناقصة عند العضو "${facultyName}".`;
+          errEl.classList.remove('hidden');
+          return;
+        }
+        if(!lecEl.querySelector('.absDate').value){
+          errEl.textContent = `لازم تحدد تاريخ الغياب لكل محاضرة — ناقص عند العضو "${facultyName}".`;
+          errEl.classList.remove('hidden');
+          return;
+        }
+        if(!lecEl.querySelector('.absTime').value){
+          errEl.textContent = `لازم تحدد وقت المحاضرة لكل محاضرة — ناقص عند العضو "${facultyName}".`;
+          errEl.classList.remove('hidden');
+          return;
+        }
         const absType = lecEl.querySelector('.absType').value;
         if(absType === 'بعذر' && lecEl.querySelector('.absFile').files.length === 0){
           errEl.textContent = 'مستند الغياب إلزامي لحالة "بعذر" — ارفع ملف العذر قبل الحفظ.';
