@@ -1845,6 +1845,15 @@ function remoteLectureTemplate(){
         <span class="abs-lecture-title">محاضرة</span>
         <button type="button" class="abs-lecture-remove">🗑 حذف المحاضرة</button>
       </div>
+      <div class="abs-sched-hint">اختر عضو هيئة التدريس أولاً — إن وُجدت له محاضرات بالجدول الدراسي ستظهر هنا لاختيارها تلقائيًا.</div>
+      <div class="abs-sched-picker hidden">
+        <label class="abs-sched-label">اختر المحاضرة من جدول العضو</label>
+        <div class="abs-sched-cards"></div>
+      </div>
+      <div class="abs-autofill-note hidden">
+        <span>✓ تم التعبئة تلقائيًا من الجدول الدراسي</span>
+        <button type="button" class="abs-autofill-edit">تعديل يدوي</button>
+      </div>
       <div class="field"><label>اسم المادة <span class="required-mark">*</span></label><input class="remCourse" type="text"></div>
       <div class="field"><label>تاريخ المحاضرة <span class="required-mark">*</span></label><input class="remDate" type="date" min="${today}"><div class="abs-hijri-hint"></div></div>
       <div class="field"><label>الوقت <span class="required-mark">*</span></label>
@@ -1861,7 +1870,11 @@ function remoteMemberTemplate(idx){
         <span class="abs-row-title">عضو ${idx + 1}</span>
         <button type="button" class="abs-row-remove abs-member-remove" data-idx="${idx}">🗑 حذف العضو</button>
       </div>
-      <div class="field"><label>عضو هيئة التدريس</label><input class="remFaculty" type="text"></div>
+      <div class="field abs-faculty-field">
+        <label>عضو هيئة التدريس</label>
+        <input class="remFaculty" type="text" list="remFacultyList-${idx}" autocomplete="off" placeholder="اكتب اسم العضو أو اختره من القائمة (مرتبة أبجديًا)...">
+        <datalist id="remFacultyList-${idx}"></datalist>
+      </div>
       <div class="abs-lectures">${remoteLectureTemplate()}</div>
       <button type="button" class="btn-text abs-add-lecture">+ إضافة محاضرة أخرى لنفس العضو</button>
     </div>`;
@@ -1893,6 +1906,88 @@ function openAddRemoteModal(){
 
   const rowsContainer = document.getElementById('remRowsContainer');
 
+  function getDeptId(){
+    return isFullEditor
+      ? (document.getElementById('remDept') ? document.getElementById('remDept').value : '')
+      : state.currentUser.department_id;
+  }
+
+  function refreshFacultyDatalist(memberEl){
+    const dl = memberEl.querySelector('datalist');
+    if(!dl) return;
+    const names = facultyNamesForDept(getDeptId());
+    dl.innerHTML = names.map(n=>`<option value="${escapeHtml(n)}"></option>`).join('');
+  }
+
+  function applyScheduleCardsToLecture(lecEl, rows, hasFaculty){
+    const picker = lecEl.querySelector('.abs-sched-picker');
+    const hint = lecEl.querySelector('.abs-sched-hint');
+    const cardsWrap = lecEl.querySelector('.abs-sched-cards');
+
+    if(!rows || rows.length === 0){
+      picker.classList.add('hidden');
+      hint.classList.remove('hidden');
+      hint.textContent = hasFaculty
+        ? 'لا توجد محاضرات مسجّلة لهذا الاسم في جدول القسم — يمكنك إدخال بيانات المحاضرة يدويًا بالأسفل.'
+        : 'اختر عضو هيئة التدريس أولاً — إن وُجدت له محاضرات بالجدول الدراسي ستظهر هنا لاختيارها تلقائيًا.';
+      cardsWrap.innerHTML = '';
+      return;
+    }
+
+    hint.classList.add('hidden');
+    picker.classList.remove('hidden');
+    cardsWrap.innerHTML = rows.map((r, i)=>`
+      <div class="abs-sched-card" data-i="${i}">
+        <div class="abs-sched-card-top"><span>${escapeHtml(r.course_name || '—')}</span><span>شعبة ${escapeHtml(r.section_number || '—')}</span></div>
+        <div class="abs-sched-card-meta">${DAY_NAME_AR[r.day_of_week] || ''} · ${escapeHtml(r.time_from || '')} - ${escapeHtml(r.time_to || '')} · قاعة ${escapeHtml(r.room || '—')}</div>
+      </div>`).join('');
+
+    cardsWrap.querySelectorAll('.abs-sched-card').forEach(card=>{
+      card.onclick = ()=>{
+        const row = rows[parseInt(card.dataset.i, 10)];
+        cardsWrap.querySelectorAll('.abs-sched-card').forEach(c=>c.classList.remove('active'));
+        card.classList.add('active');
+
+        const courseEl = lecEl.querySelector('.remCourse');
+        const timeEl = lecEl.querySelector('.remTime');
+
+        courseEl.value = row.course_name || '';
+        const label = scheduleTimeToOptionLabel(row.time_from);
+        if(label) timeEl.value = label;
+
+        courseEl.readOnly = true;
+        courseEl.classList.add('auto-filled');
+        if(label && timeEl.value === label) timeEl.classList.add('auto-filled');
+
+        lecEl.querySelector('.abs-autofill-note').classList.remove('hidden');
+      };
+    });
+  }
+
+  function refreshLectureSchedule(lecEl, facultyName, deptId){
+    const rows = facultyName ? scheduleRowsForFaculty(deptId, facultyName) : [];
+    applyScheduleCardsToLecture(lecEl, rows, !!facultyName);
+  }
+
+  function refreshMemberSchedule(memberEl){
+    const facultyName = memberEl.querySelector('.remFaculty').value.trim();
+    const deptId = getDeptId();
+    memberEl.querySelectorAll('.abs-lecture').forEach(lecEl=>{
+      refreshLectureSchedule(lecEl, facultyName, deptId);
+    });
+  }
+
+  function bindMemberFacultyInput(memberEl){
+    const input = memberEl.querySelector('.remFaculty');
+    if(input.dataset.schedBound) return;
+    input.dataset.schedBound = '1';
+    refreshFacultyDatalist(memberEl);
+    const trigger = ()=> refreshMemberSchedule(memberEl);
+    input.addEventListener('input', trigger);
+    input.addEventListener('change', trigger);
+    trigger();
+  }
+
   function rebindLectureButtons(lecturesContainer){
     lecturesContainer.querySelectorAll('.abs-lecture-remove').forEach(btn=>{
       btn.onclick = ()=>{
@@ -1909,6 +2004,19 @@ function openAddRemoteModal(){
         hint.textContent = dateInput.value ? hijriDate(dateInput.value) : '';
       });
     });
+    lecturesContainer.querySelectorAll('.abs-autofill-edit').forEach(btn=>{
+      if(btn.dataset.bound) return;
+      btn.dataset.bound = '1';
+      btn.onclick = ()=>{
+        const lecEl = btn.closest('.abs-lecture');
+        const courseEl = lecEl.querySelector('.remCourse');
+        courseEl.readOnly = false;
+        courseEl.classList.remove('auto-filled');
+        lecEl.querySelector('.remTime').classList.remove('auto-filled');
+        lecEl.querySelector('.abs-autofill-note').classList.add('hidden');
+        lecEl.querySelectorAll('.abs-sched-card').forEach(c=>c.classList.remove('active'));
+      };
+    });
     renumberLectures(lecturesContainer);
   }
 
@@ -1921,14 +2029,31 @@ function openAddRemoteModal(){
     });
     rowsContainer.querySelectorAll('.abs-add-lecture').forEach(btn=>{
       btn.onclick = ()=>{
-        const lecturesContainer = btn.closest('.abs-member').querySelector('.abs-lectures');
+        const memberEl = btn.closest('.abs-member');
+        const lecturesContainer = memberEl.querySelector('.abs-lectures');
         lecturesContainer.insertAdjacentHTML('beforeend', remoteLectureTemplate());
         rebindLectureButtons(lecturesContainer);
+        const newLecEl = lecturesContainer.querySelector('.abs-lecture:last-child');
+        const facultyName = memberEl.querySelector('.remFaculty').value.trim();
+        refreshLectureSchedule(newLecEl, facultyName, getDeptId());
       };
     });
     rowsContainer.querySelectorAll('.abs-lectures').forEach(rebindLectureButtons);
+    rowsContainer.querySelectorAll('.abs-member').forEach(bindMemberFacultyInput);
   }
   rebindMemberButtons();
+
+  if(isFullEditor){
+    const deptSelect = document.getElementById('remDept');
+    if(deptSelect){
+      deptSelect.onchange = ()=>{
+        rowsContainer.querySelectorAll('.abs-member').forEach(memberEl=>{
+          refreshFacultyDatalist(memberEl);
+          refreshMemberSchedule(memberEl);
+        });
+      };
+    }
+  }
 
   document.getElementById('remAddRow').onclick = ()=>{
     memberCount++;
