@@ -519,6 +519,16 @@
   .schedule-mgmt-note{font-size:12px;color:var(--ink-soft);padding:10px 2px 0;}
 
   /* ===== الاختيار من الجدول داخل نموذج الغياب ===== */
+  .edit-record-btn{
+    font-size:12px;color:var(--ink-soft);background:none;border:1px solid var(--line);
+    border-radius:2px;padding:3px 10px;font-weight:600;
+  }
+  .edit-record-btn:hover{color:var(--seal-dark);border-color:var(--seal-dark);}
+  .withdraw-record-btn{
+    font-size:12px;color:var(--redd);background:none;border:1px solid var(--redd);
+    border-radius:2px;padding:3px 10px;font-weight:600;margin-right:6px;
+  }
+  .withdraw-record-btn:hover{background:var(--redd);color:#fff;}
   .abs-sched-picker{margin:8px 0;}
   .abs-sched-label{display:block;font-size:11.5px;color:var(--ink-soft);margin-bottom:6px;}
   .abs-sched-cards{display:flex;flex-direction:column;gap:6px;max-height:180px;overflow-y:auto;}
@@ -1296,9 +1306,69 @@ function normText(s){
   return (s || '').toString().trim().replace(/\s+/g, ' ');
 }
 
+// سحب الطلب من القسم: حذف نهائي — لا يبقى له أثر في السجل ولا الأرشيف ولا التقارير. السبب إلزامي قبل التنفيذ.
+function promptWithdrawReason(title, onConfirm){
+  const overlay = document.getElementById('modalOverlay');
+  overlay.classList.remove('hidden');
+  overlay.innerHTML = `
+    <div class="modal">
+      <h3>${escapeHtml(title)}</h3>
+      <p style="color:var(--ink-soft);font-size:13px;margin-top:-6px;">سيتم حذف الطلب نهائيًا ولن يظهر في الأرشيف أو التقارير ولن يصل للمراجعة. يمكنك رفع طلب جديد لاحقًا إذا لزم.</p>
+      <div class="field"><label>سبب السحب <span class="required-mark">*</span></label><textarea id="wdReasonInput" placeholder="اكتب سبب سحب الطلب هنا..."></textarea></div>
+      <p class="login-error hidden" id="wdErr"></p>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="wdCancel">رجوع</button>
+        <button class="btn-danger" id="wdConfirm">تأكيد السحب</button>
+      </div>
+    </div>`;
+  document.getElementById('wdCancel').onclick = closeModal;
+  document.getElementById('wdConfirm').onclick = async ()=>{
+    const reason = document.getElementById('wdReasonInput').value.trim();
+    const errEl = document.getElementById('wdErr');
+    if(!reason){
+      errEl.textContent = 'لازم تكتب سبب السحب.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+    const btn = document.getElementById('wdConfirm');
+    if(btn.disabled) return;
+    btn.disabled = true;
+    btn.textContent = 'جارٍ السحب...';
+    await onConfirm(reason);
+  };
+}
+
+// ينفّذ السحب (حذف نهائي) بعد التأكد أن الطلب ما زال قيد المراجعة، ويحذف مرفقه من التخزين إن وجد
+async function withdrawRecord(table, id){
+  const { data: cur } = await sb.from(table).select('*').eq('id', id).single();
+  if(!cur){
+    closeModal();
+    await loadAll();
+    return;
+  }
+  if(!isPendingItem(cur)){
+    closeModal();
+    alert('تم اتخاذ قرار على هذا الطلب، فلا يمكن سحبه الآن.');
+    await loadAll();
+    return;
+  }
+  const { error } = await sb.from(table).delete().eq('id', id);
+  if(error){
+    alert('تعذر سحب الطلب، حاول مرة أخرى.');
+    closeModal();
+    return;
+  }
+  if(cur.document_path){
+    sb.storage.from('absence-documents').remove([cur.document_path]).catch(()=>{});
+  }
+  closeModal();
+  await loadAll();
+}
+
 // يبحث عن طلب غياب مطابق مسجّل مسبقًا لنفس العضو/المادة/التاريخ/الوقت في نفس القسم
-function findDuplicateAbsence(deptId, facultyName, courseName, date, time){
+function findDuplicateAbsence(deptId, facultyName, courseName, date, time, excludeId){
   return state.absences.find(a =>
+    a.id !== excludeId &&
     a.department_id === deptId &&
     normText(a.faculty_name) === normText(facultyName) &&
     normText(a.course_name) === normText(courseName) &&
@@ -1309,8 +1379,9 @@ function findDuplicateAbsence(deptId, facultyName, courseName, date, time){
 }
 
 // يبحث عن طلب تحويل مطابق مسجّل مسبقًا لنفس العضو/المادة/التاريخ/الوقت في نفس القسم
-function findDuplicateRemote(deptId, facultyName, courseName, date, time){
+function findDuplicateRemote(deptId, facultyName, courseName, date, time, excludeId){
   return state.remoteRequests.find(r =>
+    r.id !== excludeId &&
     r.department_id === deptId &&
     normText(r.faculty_name) === normText(facultyName) &&
     normText(r.course_name) === normText(courseName) &&
@@ -1456,7 +1527,34 @@ function facultyNamesForDept(deptId){
   return [...names].sort((a,b) => a.localeCompare(b, 'ar'));
 }
 
-// محاضرات عضو معيّن داخل قسم معيّن (قد يكون له أكثر من محاضرة/شعبة)
+// تطبيع اسم للمطابقة المرنة: يتجاهل الألقاب (د./أ.د/الدكتور) والتشكيل واختلاف الهمزات والياء/الألف المقصورة والتاء المربوطة
+function normFacultyName(s){
+  return normText(s)
+    .replace(/[ً-ٟـ]/g, '')
+    .replace(/(^|\s)(أ\.?\s?د\.?|د\.|د|الدكتور(ة)?|الأستاذ(ة)?|أستاذ(ة)?)(?=\s)/g, ' ')
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ى/g, 'ي')
+    .replace(/ة/g, 'ه')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// أسماء أعضاء القسم (من الجدول) المطابقة لما كتبه المستخدم: مطابقة تامة أولاً، وإلا كل كلمات المكتوب موجودة بالاسم الكامل
+// (مثال: "محمد الراشد" يطابق "محمد صالح محيجين الراشد")
+function facultyMatches(deptId, typed){
+  const t = normFacultyName(typed);
+  if(!t) return [];
+  const names = facultyNamesForDept(deptId);
+  const exact = names.filter(n => normFacultyName(n) === t);
+  if(exact.length) return exact;
+  const tokens = t.split(' ').filter(Boolean);
+  return names.filter(n => {
+    const nn = normFacultyName(n);
+    return tokens.every(tok => nn.split(' ').some(w => w === tok || w.startsWith(tok)));
+  });
+}
+
+// محاضرات عضو معيّن داخل قسم معيّن (قد يكون له أكثر من محاضرة/شعبة) — يطابق الاسم الرسمي الكامل
 function scheduleRowsForFaculty(deptId, facultyName){
   const target = normText(facultyName);
   return scheduleRowsForDept(deptId).filter(r => normText(r.faculty_name) === target);
@@ -1640,8 +1738,9 @@ function renderAbsences(){
   const decisionBlock = (item, kind) => {
     if(item.status === 'مقبول') return `<span class="badge-inline badge-approved">✅ مقبول</span>`;
     if(item.status === 'مرفوض') return `<span class="badge-inline badge-rejected">❌ مرفوض</span>${item.decision_note ? `<div class="rejection-note">${escapeHtml(item.decision_note)}</div>` : ''}`;
-    if(isFullEditor) return `<div class="decision-actions"><button class="decide-btn" data-id="${item.id}" data-kind="${kind}" data-action="مقبول">✅ قبول</button><button class="reject-btn" data-id="${item.id}" data-kind="${kind}">❌ رفض</button></div>`;
-    return `<span class="badge-inline badge-pending">📋 قيد المراجعة</span>`;
+    const editBtn = `<button class="edit-record-btn" data-id="${item.id}" data-kind="${kind}">✏️ تعديل</button><button class="withdraw-record-btn" data-id="${item.id}" data-kind="${kind}">↩️ سحب الطلب</button>`;
+    if(isFullEditor) return `<div class="decision-actions"><button class="decide-btn" data-id="${item.id}" data-kind="${kind}" data-action="مقبول">✅ قبول</button><button class="reject-btn" data-id="${item.id}" data-kind="${kind}">❌ رفض</button>${editBtn}</div>`;
+    return `<span class="badge-inline badge-pending">📋 قيد المراجعة</span> ${editBtn}`;
   };
 
   const cardHtml = a => `
@@ -1678,9 +1777,21 @@ function renderAbsences(){
     ${bodyHtml}
   `;
 
-  document.getElementById('addAbsenceBtn').onclick = openAddAbsenceModal;
+  document.getElementById('addAbsenceBtn').onclick = ()=> openAddAbsenceModal();
 
   if(useAccordion) wireDeptAccordionToggles(panel, 'absence', renderAbsences);
+
+  panel.querySelectorAll('.edit-record-btn[data-kind="absence"]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const item = state.absences.find(x => x.id === btn.dataset.id);
+      if(item) openAddAbsenceModal(item);
+    };
+  });
+  panel.querySelectorAll('.withdraw-record-btn[data-kind="absence"]').forEach(btn=>{
+    btn.onclick = ()=>{
+      promptWithdrawReason('سحب تقرير الغياب', ()=> withdrawRecord('faculty_absences', btn.dataset.id));
+    };
+  });
 
   panel.querySelectorAll('.decide-btn[data-kind="absence"]').forEach(btn=>{
     btn.onclick = async ()=>{
@@ -1719,8 +1830,9 @@ function renderRemoteRequests(){
   const decisionBlock = (item, kind) => {
     if(item.status === 'مقبول') return `<span class="badge-inline badge-approved">✅ مقبول</span>`;
     if(item.status === 'مرفوض') return `<span class="badge-inline badge-rejected">❌ مرفوض</span>${item.decision_note ? `<div class="rejection-note">${escapeHtml(item.decision_note)}</div>` : ''}`;
-    if(isFullEditor) return `<div class="decision-actions"><button class="decide-btn" data-id="${item.id}" data-kind="${kind}" data-action="مقبول">✅ قبول</button><button class="reject-btn" data-id="${item.id}" data-kind="${kind}">❌ رفض</button></div>`;
-    return `<span class="badge-inline badge-pending">📋 قيد المراجعة</span>`;
+    const editBtn = `<button class="edit-record-btn" data-id="${item.id}" data-kind="${kind}">✏️ تعديل</button><button class="withdraw-record-btn" data-id="${item.id}" data-kind="${kind}">↩️ سحب الطلب</button>`;
+    if(isFullEditor) return `<div class="decision-actions"><button class="decide-btn" data-id="${item.id}" data-kind="${kind}" data-action="مقبول">✅ قبول</button><button class="reject-btn" data-id="${item.id}" data-kind="${kind}">❌ رفض</button>${editBtn}</div>`;
+    return `<span class="badge-inline badge-pending">📋 قيد المراجعة</span> ${editBtn}`;
   };
 
   const cardHtml = r => `
@@ -1754,9 +1866,21 @@ function renderRemoteRequests(){
     ${bodyHtml}
   `;
 
-  document.getElementById('addRemoteBtn').onclick = openAddRemoteModal;
+  document.getElementById('addRemoteBtn').onclick = ()=> openAddRemoteModal();
 
   if(useAccordion) wireDeptAccordionToggles(panel, 'remote', renderRemoteRequests);
+
+  panel.querySelectorAll('.edit-record-btn[data-kind="remote"]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const item = state.remoteRequests.find(x => x.id === btn.dataset.id);
+      if(item) openAddRemoteModal(item);
+    };
+  });
+  panel.querySelectorAll('.withdraw-record-btn[data-kind="remote"]').forEach(btn=>{
+    btn.onclick = ()=>{
+      promptWithdrawReason('سحب طلب التحويل إلى عن بعد', ()=> withdrawRecord('remote_lecture_requests', btn.dataset.id));
+    };
+  });
 
   panel.querySelectorAll('.decide-btn[data-kind="remote"]').forEach(btn=>{
     btn.onclick = async ()=>{
@@ -1783,7 +1907,7 @@ function renderServicesArchive(){
     : state.absences;
   const decidedAbsences = scopedAbsences.filter(a => (a.status === 'مقبول' || a.status === 'مرفوض') && !isWithinGracePeriod(a.decided_at));
 
-  const badgeFor = (status) => status === 'مقبول'
+  const badgeFor = (item) => item.status === 'مقبول'
     ? `<span class="badge-inline badge-approved">✅ مقبول</span>`
     : `<span class="badge-inline badge-rejected">❌ مرفوض</span>`;
 
@@ -1792,7 +1916,7 @@ function renderServicesArchive(){
       <div class="report-meta">
         ${role === 'department' ? '' : `<span class="report-dept">${escapeHtml(deptName(a.department_id))}</span> — `}
         ${escapeHtml(a.faculty_name)} — ${escapeHtml(a.course_name || '—')} — ${a.absence_date || '—'}
-        ${badgeFor(a.status)}
+        ${badgeFor(a)}
       </div>
       ${a.decision_note ? `<div class="rejection-note">${escapeHtml(a.decision_note)}</div>` : ''}
     </li>`).join('');
@@ -1814,7 +1938,7 @@ function renderRemoteArchive(){
     : state.remoteRequests;
   const decidedRemote = scopedRemote.filter(r => (r.status === 'مقبول' || r.status === 'مرفوض') && !isWithinGracePeriod(r.decided_at));
 
-  const badgeFor = (status) => status === 'مقبول'
+  const badgeFor = (item) => item.status === 'مقبول'
     ? `<span class="badge-inline badge-approved">✅ مقبول</span>`
     : `<span class="badge-inline badge-rejected">❌ مرفوض</span>`;
 
@@ -1823,7 +1947,7 @@ function renderRemoteArchive(){
       <div class="report-meta">
         ${role === 'department' ? '' : `<span class="report-dept">${escapeHtml(deptName(r.department_id))}</span> — `}
         ${escapeHtml(r.faculty_name)} — ${escapeHtml(r.course_name || '—')} — ${r.lecture_date || '—'}
-        ${badgeFor(r.status)}
+        ${badgeFor(r)}
       </div>
       ${r.decision_note ? `<div class="rejection-note">${escapeHtml(r.decision_note)}</div>` : ''}
     </li>`).join('');
@@ -1880,7 +2004,7 @@ function remoteMemberTemplate(idx){
     </div>`;
 }
 
-function openAddRemoteModal(){
+function openAddRemoteModal(editItem){
   const role = state.currentUser.role;
   const isFullEditor = EDITOR_ROLES.includes(role);
   const overlay = document.getElementById('modalOverlay');
@@ -1889,7 +2013,7 @@ function openAddRemoteModal(){
 
   overlay.innerHTML = `
     <div class="modal modal-wide">
-      <h3>طلب تحويل محاضرة حضورية إلى عن بعد</h3>
+      <h3>${editItem ? 'تعديل طلب التحويل إلى عن بعد' : 'طلب تحويل محاضرة حضورية إلى عن بعد'}</h3>
       ${isFullEditor ? `
       <div class="field"><label>القسم</label>
         <select id="remDept">${state.departments.map(d=>`<option value="${d.id}">${d.name}</option>`).join('')}</select>
@@ -1965,8 +2089,13 @@ function openAddRemoteModal(){
   }
 
   function refreshLectureSchedule(lecEl, facultyName, deptId){
-    const rows = facultyName ? scheduleRowsForFaculty(deptId, facultyName) : [];
+    const names = facultyName ? facultyMatches(deptId, facultyName) : [];
+    const rows = names.length === 1 ? scheduleRowsForFaculty(deptId, names[0]) : [];
     applyScheduleCardsToLecture(lecEl, rows, !!facultyName);
+    if(names.length > 1){
+      lecEl.querySelector('.abs-sched-hint').textContent =
+        `يوجد أكثر من اسم مطابق (${names.slice(0, 4).join('، ')}) — اختر الاسم الكامل من القائمة.`;
+    }
   }
 
   function refreshMemberSchedule(memberEl){
@@ -1984,7 +2113,12 @@ function openAddRemoteModal(){
     refreshFacultyDatalist(memberEl);
     const trigger = ()=> refreshMemberSchedule(memberEl);
     input.addEventListener('input', trigger);
-    input.addEventListener('change', trigger);
+    input.addEventListener('change', ()=>{
+      // إن طابق ما كتبه المستخدم اسمًا واحدًا فقط في جدول القسم، نكمّله تلقائيًا بالاسم الرسمي الكامل
+      const names = facultyMatches(getDeptId(), input.value);
+      if(names.length === 1 && input.value.trim() !== names[0]) input.value = names[0];
+      trigger();
+    });
     trigger();
   }
 
@@ -2055,6 +2189,32 @@ function openAddRemoteModal(){
     }
   }
 
+  // وضع التعديل: نملأ النموذج ببيانات الطلب الحالي ونخفي أدوات إضافة/حذف الأعضاء والمحاضرات (تعديل سجل واحد فقط)
+  if(editItem){
+    const deptSelect = document.getElementById('remDept');
+    if(deptSelect){ deptSelect.value = editItem.department_id; deptSelect.disabled = true; }
+    const memberEl = rowsContainer.querySelector('.abs-member');
+    const lecEl = memberEl.querySelector('.abs-lecture');
+    memberEl.querySelector('.remFaculty').value = editItem.faculty_name || '';
+    refreshFacultyDatalist(memberEl);
+    refreshMemberSchedule(memberEl);
+    lecEl.querySelector('.remCourse').value = editItem.course_name || '';
+    const dateInput = lecEl.querySelector('.remDate');
+    dateInput.value = editItem.lecture_date || '';
+    dateInput.removeAttribute('min'); // قد يكون تاريخ الطلب القديم مضى؛ نتحقق من التاريخ فقط إذا غيّره المستخدم
+    const hijriHint = lecEl.querySelector('.abs-hijri-hint');
+    if(hijriHint && dateInput.value) hijriHint.textContent = hijriDate(dateInput.value);
+    lecEl.querySelector('.remTime').value = editItem.lecture_time || '';
+    lecEl.querySelector('.remJustification').value = editItem.justification || '';
+    document.getElementById('remNotes').value = editItem.head_notes || '';
+    document.getElementById('remAddRow').classList.add('hidden');
+    memberEl.querySelector('.abs-member-remove').classList.add('hidden');
+    memberEl.querySelector('.abs-add-lecture').classList.add('hidden');
+    lecEl.querySelector('.abs-lecture-remove').classList.add('hidden');
+    memberEl.querySelector('.abs-row-title').textContent = 'بيانات الطلب';
+    document.getElementById('remSave').textContent = 'حفظ التعديل';
+  }
+
   document.getElementById('remAddRow').onclick = ()=>{
     memberCount++;
     rowsContainer.insertAdjacentHTML('beforeend', remoteMemberTemplate(memberCount - 1));
@@ -2122,7 +2282,8 @@ function openAddRemoteModal(){
       const facultyName = memberEl.querySelector('.remFaculty').value.trim();
       for(const lecEl of memberEl.querySelectorAll('.abs-lecture')){
         const lectureDate = lecEl.querySelector('.remDate').value || null;
-        if(lectureDate && lectureDate < today){
+        const dateUnchanged = !!(editItem && editItem.lecture_date === lectureDate);
+        if(lectureDate && lectureDate < today && !dateUnchanged){
           errEl.textContent = 'لا يمكن تسجيل طلب تحويل لتاريخ سابق — التاريخ لازم يكون اليوم أو بعده.';
           errEl.classList.remove('hidden');
           return;
@@ -2137,7 +2298,7 @@ function openAddRemoteModal(){
           return;
         }
         seenKeysRem.add(dupKey);
-        const dup = findDuplicateRemote(deptId, facultyName, courseName, lectureDate, lectureTime);
+        const dup = findDuplicateRemote(deptId, facultyName, courseName, lectureDate, lectureTime, editItem ? editItem.id : undefined);
         if(dup){
           errEl.textContent = `يوجد طلب تحويل مسجّل مسبقًا لنفس العضو "${facultyName}" بنفس المادة والتاريخ والوقت — لا يمكن تكرار نفس الطلب.`;
           errEl.classList.remove('hidden');
@@ -2166,6 +2327,35 @@ function openAddRemoteModal(){
     if(saveBtn.disabled) return; // يمنع الإرسال المزدوج عند الضغط أكثر من مرة
     saveBtn.disabled = true;
     saveBtn.textContent = 'جارٍ الحفظ...';
+
+    if(editItem){
+      // نتأكد أن الطلب ما زال قيد المراجعة قبل التعديل (قد يكون المراجع اتخذ قرارًا أثناء فتح النموذج)
+      const { data: cur } = await sb.from('remote_lecture_requests').select('status').eq('id', editItem.id).single();
+      if(cur && !isPendingItem(cur)){
+        closeModal();
+        alert('تم اتخاذ قرار على هذا الطلب، فلا يمكن تعديله الآن.');
+        await loadAll();
+        return;
+      }
+      const e = entries[0];
+      const { error: updErr } = await sb.from('remote_lecture_requests').update({
+        faculty_name: e.faculty_name,
+        course_name: e.course_name,
+        lecture_date: e.lecture_date,
+        lecture_time: e.lecture_time,
+        justification: e.justification,
+        head_notes: e.head_notes
+      }).eq('id', editItem.id);
+      if(updErr){
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'حفظ التعديل';
+        alert('تعذر حفظ التعديل، حاول مرة أخرى.');
+        return;
+      }
+      closeModal();
+      await loadAll();
+      return;
+    }
 
     await sb.from('remote_lecture_requests').insert(entries);
     closeModal();
@@ -2236,7 +2426,7 @@ function absenceMemberTemplate(idx){
     </div>`;
 }
 
-function openAddAbsenceModal(){
+function openAddAbsenceModal(editItem){
   const role = state.currentUser.role;
   const isFullEditor = EDITOR_ROLES.includes(role);
   const overlay = document.getElementById('modalOverlay');
@@ -2246,7 +2436,7 @@ function openAddAbsenceModal(){
   overlay.innerHTML = `
     <div class="modal modal-wide">
       <div id="absFormView">
-        <h3>تقرير القسم الأسبوعي</h3>
+        <h3>${editItem ? 'تعديل تقرير الغياب' : 'تقرير القسم الأسبوعي'}</h3>
         ${isFullEditor ? `
         <div class="field"><label>القسم</label>
           <select id="absDept">${state.departments.map(d=>`<option value="${d.id}">${d.name}</option>`).join('')}</select>
@@ -2327,8 +2517,13 @@ function openAddAbsenceModal(){
   }
 
   function refreshLectureSchedule(lecEl, facultyName, deptId){
-    const rows = facultyName ? scheduleRowsForFaculty(deptId, facultyName) : [];
+    const names = facultyName ? facultyMatches(deptId, facultyName) : [];
+    const rows = names.length === 1 ? scheduleRowsForFaculty(deptId, names[0]) : [];
     applyScheduleCardsToLecture(lecEl, rows, !!facultyName);
+    if(names.length > 1){
+      lecEl.querySelector('.abs-sched-hint').textContent =
+        `يوجد أكثر من اسم مطابق (${names.slice(0, 4).join('، ')}) — اختر الاسم الكامل من القائمة.`;
+    }
   }
 
   function refreshMemberSchedule(memberEl){
@@ -2346,7 +2541,12 @@ function openAddAbsenceModal(){
     refreshFacultyDatalist(memberEl);
     const trigger = ()=> refreshMemberSchedule(memberEl);
     input.addEventListener('input', trigger);
-    input.addEventListener('change', trigger);
+    input.addEventListener('change', ()=>{
+      // إن طابق ما كتبه المستخدم اسمًا واحدًا فقط في جدول القسم، نكمّله تلقائيًا بالاسم الرسمي الكامل
+      const names = facultyMatches(getDeptId(), input.value);
+      if(names.length === 1 && input.value.trim() !== names[0]) input.value = names[0];
+      trigger();
+    });
     trigger();
   }
 
@@ -2419,6 +2619,38 @@ function openAddAbsenceModal(){
     }
   }
 
+  // وضع التعديل: نملأ النموذج ببيانات التقرير الحالي، ونخفي أدوات إضافة/حذف الأعضاء والمحاضرات (تعديل سجل واحد فقط)
+  if(editItem){
+    const deptSelect = document.getElementById('absDept');
+    if(deptSelect){ deptSelect.value = editItem.department_id; deptSelect.disabled = true; }
+    const memberEl = rowsContainer.querySelector('.abs-member');
+    const lecEl = memberEl.querySelector('.abs-lecture');
+    const facultyInput = memberEl.querySelector('.absFaculty');
+    facultyInput.value = editItem.faculty_name || '';
+    refreshFacultyDatalist(memberEl);
+    refreshMemberSchedule(memberEl);
+    lecEl.querySelector('.absCourse').value = editItem.course_name || '';
+    lecEl.querySelector('.absSection').value = editItem.section_number || '';
+    const dateInput = lecEl.querySelector('.absDate');
+    dateInput.value = editItem.absence_date || '';
+    const hijriHint = lecEl.querySelector('.abs-hijri-hint');
+    if(hijriHint && dateInput.value) hijriHint.textContent = hijriDate(dateInput.value);
+    lecEl.querySelector('.absTime').value = editItem.absence_time || '';
+    lecEl.querySelector('.absRoom').value = editItem.room || '';
+    lecEl.querySelector('.absType').value = editItem.absence_type || 'بعذر';
+    document.getElementById('absNotes').value = editItem.head_notes || '';
+    if(editItem.document_name){
+      const fileField = lecEl.querySelector('.absFile').closest('.field');
+      fileField.insertAdjacentHTML('beforeend', `<div class="abs-hijri-hint">المستند الحالي: 📎 ${escapeHtml(editItem.document_name)} — اختر ملفًا جديدًا فقط إذا أردت استبداله.</div>`);
+    }
+    document.getElementById('absAddRow').classList.add('hidden');
+    memberEl.querySelector('.abs-member-remove').classList.add('hidden');
+    memberEl.querySelector('.abs-add-lecture').classList.add('hidden');
+    lecEl.querySelector('.abs-lecture-remove').classList.add('hidden');
+    memberEl.querySelector('.abs-row-title').textContent = 'بيانات التقرير';
+    document.getElementById('absSave').textContent = 'متابعة';
+  }
+
   document.getElementById('absAddRow').onclick = ()=>{
     memberCount++;
     rowsContainer.insertAdjacentHTML('beforeend', absenceMemberTemplate(memberCount - 1));
@@ -2482,7 +2714,8 @@ function openAddAbsenceModal(){
           return;
         }
         const absType = lecEl.querySelector('.absType').value;
-        if(absType === 'بعذر' && lecEl.querySelector('.absFile').files.length === 0){
+        const hasExistingDoc = !!(editItem && editItem.document_path);
+        if(absType === 'بعذر' && lecEl.querySelector('.absFile').files.length === 0 && !hasExistingDoc){
           errEl.textContent = 'مستند الغياب إلزامي لحالة "بعذر" — ارفع ملف العذر قبل الحفظ.';
           errEl.classList.remove('hidden');
           return;
@@ -2507,7 +2740,7 @@ function openAddAbsenceModal(){
           return;
         }
         seenKeysAbs.add(dupKey);
-        const dup = findDuplicateAbsence(deptId, facultyName, course, date, time);
+        const dup = findDuplicateAbsence(deptId, facultyName, course, date, time, editItem ? editItem.id : undefined);
         if(dup){
           errEl.textContent = `يوجد تقرير غياب مسجّل مسبقًا لنفس العضو "${facultyName}" بنفس المادة والتاريخ والوقت — لا يمكن تكرار نفس التقرير.`;
           errEl.classList.remove('hidden');
@@ -2522,7 +2755,7 @@ function openAddAbsenceModal(){
           time,
           room: lecEl.querySelector('.absRoom').value || '',
           type: lecEl.querySelector('.absType').value,
-          fileName: fileInput.files.length > 0 ? fileInput.files[0].name : null
+          fileName: fileInput.files.length > 0 ? fileInput.files[0].name : (editItem ? (editItem.document_name || null) : null)
         });
       }
     }
@@ -2535,8 +2768,8 @@ function openAddAbsenceModal(){
     const reviewView = document.getElementById('absReviewView');
     reviewView.classList.remove('hidden');
     reviewView.innerHTML = `
-      <h3>مراجعة التقرير قبل الإرسال</h3>
-      <p style="color:var(--ink-soft);font-size:13px;margin-top:-6px;">راجع البيانات التالية جيدًا. يمكنك الرجوع للتعديل قبل الإرسال النهائي.</p>
+      <h3>${editItem ? 'مراجعة التعديل قبل الحفظ' : 'مراجعة التقرير قبل الإرسال'}</h3>
+      <p style="color:var(--ink-soft);font-size:13px;margin-top:-6px;">راجع البيانات التالية جيدًا. يمكنك الرجوع للتعديل قبل ${editItem ? 'الحفظ' : 'الإرسال'} النهائي.</p>
       <div class="abs-review-list">
         ${plan.map((p, i)=>`
           <div class="abs-review-item">
@@ -2557,7 +2790,7 @@ function openAddAbsenceModal(){
       <div class="field" style="margin-top:14px;"><label>مرئيات رئيس القسم بشأن التقرير</label><div class="abs-review-notes">${escapeHtml(sharedNotes)}</div></div>
       <div class="modal-actions">
         <button class="btn-ghost" id="absBack">⬅ رجوع للتعديل</button>
-        <button class="btn-primary" id="absConfirm">✅ تأكيد الإرسال</button>
+        <button class="btn-primary" id="absConfirm">${editItem ? '✅ حفظ التعديل' : '✅ تأكيد الإرسال'}</button>
       </div>`;
 
     document.getElementById('absBack').onclick = ()=>{
@@ -2579,8 +2812,8 @@ function openAddAbsenceModal(){
       for(const memberEl of memberEls2){
         const facultyName = memberEl.querySelector('.absFaculty').value.trim();
         for(const lecEl of memberEl.querySelectorAll('.abs-lecture')){
-          let documentPath = null;
-          let documentName = null;
+          let documentPath = editItem ? (editItem.document_path || null) : null;
+          let documentName = editItem ? (editItem.document_name || null) : null;
           const fileInput = lecEl.querySelector('.absFile');
           if(fileInput.files.length > 0){
             const file = fileInput.files[0];
@@ -2607,6 +2840,44 @@ function openAddAbsenceModal(){
 
       if(entries.length === 0){
         closeModal();
+        return;
+      }
+
+      if(editItem){
+        // نتأكد أن التقرير ما زال قيد المراجعة قبل التعديل (قد يكون المراجع اتخذ قرارًا أثناء فتح النموذج)
+        const { data: cur } = await sb.from('faculty_absences').select('status').eq('id', editItem.id).single();
+        if(cur && !isPendingItem(cur)){
+          closeModal();
+          alert('تم اتخاذ قرار على هذا التقرير، فلا يمكن تعديله الآن.');
+          await loadAll();
+          return;
+        }
+        const e = entries[0];
+        const { error: updErr } = await sb.from('faculty_absences').update({
+          faculty_name: e.faculty_name,
+          course_name: e.course_name,
+          section_number: e.section_number,
+          absence_date: e.absence_date,
+          absence_time: e.absence_time,
+          room: e.room,
+          absence_type: e.absence_type,
+          document_path: e.document_path,
+          document_name: e.document_name,
+          head_notes: e.head_notes
+        }).eq('id', editItem.id);
+        if(updErr){
+          confirmBtn.disabled = false;
+          backBtn.disabled = false;
+          confirmBtn.textContent = '✅ حفظ التعديل';
+          alert('تعذر حفظ التعديل، حاول مرة أخرى.');
+          return;
+        }
+        // حذف المستند القديم من التخزين إذا تم استبداله (لا يؤثر على نجاح الحفظ لو فشل)
+        if(editItem.document_path && e.document_path !== editItem.document_path){
+          sb.storage.from('absence-documents').remove([editItem.document_path]).catch(()=>{});
+        }
+        closeModal();
+        await loadAll();
         return;
       }
 
