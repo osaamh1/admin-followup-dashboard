@@ -529,6 +529,16 @@
     border-radius:2px;padding:3px 10px;font-weight:600;margin-right:6px;
   }
   .withdraw-record-btn:hover{background:var(--redd);color:#fff;}
+  .abs-faculty-field{position:relative;}
+  .abs-faculty-suggest{
+    position:absolute;right:0;left:0;top:100%;margin-top:-12px;z-index:20;
+    background:#fff;border:1px solid var(--line);border-radius:var(--radius);
+    max-height:200px;overflow-y:auto;box-shadow:0 6px 16px rgba(28,35,33,0.15);
+  }
+  .abs-suggest-item{padding:8px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--line);}
+  .abs-suggest-item:last-child{border-bottom:none;}
+  .abs-suggest-item:hover{background:var(--teal-tint);color:var(--seal-dark);}
+  .abs-suggest-empty{padding:9px 12px;font-size:12px;color:var(--ink-soft);}
   .abs-sched-picker{margin:8px 0;}
   .abs-sched-label{display:block;font-size:11.5px;color:var(--ink-soft);margin-bottom:6px;}
   .abs-sched-cards{display:flex;flex-direction:column;gap:6px;max-height:180px;overflow-y:auto;}
@@ -1532,11 +1542,17 @@ function normFacultyName(s){
   return normText(s)
     .replace(/[ً-ٟـ]/g, '')
     .replace(/(^|\s)(أ\.?\s?د\.?|د\.|د|الدكتور(ة)?|الأستاذ(ة)?|أستاذ(ة)?)(?=\s)/g, ' ')
-    .replace(/[أإآ]/g, 'ا')
+    .replace(/[أإآٱ]/g, 'ا')
+    .replace(/ؤ/g, 'و')
+    .replace(/ئ/g, 'ي')
     .replace(/ى/g, 'ي')
     .replace(/ة/g, 'ه')
     .replace(/\s+/g, ' ')
-    .trim();
+    .trim()
+    // نتجاهل "ال" التعريف في بداية كل كلمة (الراشد = راشد)
+    .split(' ')
+    .map(w => (w.length > 3 && w.startsWith('ال')) ? w.slice(2) : w)
+    .join(' ');
 }
 
 // أسماء أعضاء القسم (من الجدول) المطابقة لما كتبه المستخدم: مطابقة تامة أولاً، وإلا كل كلمات المكتوب موجودة بالاسم الكامل
@@ -1548,10 +1564,43 @@ function facultyMatches(deptId, typed){
   const exact = names.filter(n => normFacultyName(n) === t);
   if(exact.length) return exact;
   const tokens = t.split(' ').filter(Boolean);
+  // كل كلمة مكتوبة يجب أن تظهر في أي موضع من الاسم (بحث مرن: "حمد" تطابق "محمد")
   return names.filter(n => {
     const nn = normFacultyName(n);
-    return tokens.every(tok => nn.split(' ').some(w => w === tok || w.startsWith(tok)));
+    return tokens.every(tok => nn.includes(tok));
   });
+}
+
+// قائمة اقتراحات الأسماء تحت حقل "عضو هيئة التدريس": بحث بأي جزء من الاسم، مرتبة أبجديًا، وتُعرض عند الضغط على الحقل
+function attachFacultySuggest(input, getDeptId, onPick){
+  const wrap = input.closest('.abs-faculty-field');
+  const box = wrap ? wrap.querySelector('.abs-faculty-suggest') : null;
+  if(!box) return;
+  function render(){
+    const deptId = getDeptId();
+    const typed = input.value.trim();
+    const names = typed ? facultyMatches(deptId, typed) : facultyNamesForDept(deptId);
+    if(!names.length){
+      box.innerHTML = typed
+        ? `<div class="abs-suggest-empty">لا يوجد اسم مطابق في جدول هذا القسم — تأكد من القسم المحدد، أو اكتب الاسم يدويًا.</div>`
+        : '';
+    } else {
+      box.innerHTML = names.map((n, i) => `<div class="abs-suggest-item" data-i="${i}">${escapeHtml(n)}</div>`).join('');
+      box.querySelectorAll('.abs-suggest-item').forEach(el => {
+        el.onmousedown = (ev) => {
+          ev.preventDefault();
+          input.value = names[parseInt(el.dataset.i, 10)];
+          box.classList.add('hidden');
+          onPick();
+        };
+      });
+    }
+    box.classList.toggle('hidden', !box.innerHTML);
+  }
+  input.addEventListener('focus', render);
+  input.addEventListener('input', render);
+  input.addEventListener('blur', () => box.classList.add('hidden'));
+  input.addEventListener('keydown', e => { if(e.key === 'Escape') box.classList.add('hidden'); });
 }
 
 // محاضرات عضو معيّن داخل قسم معيّن (قد يكون له أكثر من محاضرة/شعبة) — يطابق الاسم الرسمي الكامل
@@ -1996,8 +2045,8 @@ function remoteMemberTemplate(idx){
       </div>
       <div class="field abs-faculty-field">
         <label>عضو هيئة التدريس</label>
-        <input class="remFaculty" type="text" list="remFacultyList-${idx}" autocomplete="off" placeholder="اكتب اسم العضو أو اختره من القائمة (مرتبة أبجديًا)...">
-        <datalist id="remFacultyList-${idx}"></datalist>
+        <input class="remFaculty" type="text" autocomplete="off" placeholder="اكتب جزءًا من اسم العضو أو اختره من القائمة (مرتبة أبجديًا)...">
+        <div class="abs-faculty-suggest hidden"></div>
       </div>
       <div class="abs-lectures">${remoteLectureTemplate()}</div>
       <button type="button" class="btn-text abs-add-lecture">+ إضافة محاضرة أخرى لنفس العضو</button>
@@ -2119,6 +2168,7 @@ function openAddRemoteModal(editItem){
       if(names.length === 1 && input.value.trim() !== names[0]) input.value = names[0];
       trigger();
     });
+    attachFacultySuggest(input, getDeptId, trigger);
     trigger();
   }
 
@@ -2418,8 +2468,8 @@ function absenceMemberTemplate(idx){
       </div>
       <div class="field abs-faculty-field">
         <label>عضو هيئة التدريس</label>
-        <input class="absFaculty" type="text" list="absFacultyList-${idx}" autocomplete="off" placeholder="اكتب اسم العضو أو اختره من القائمة (مرتبة أبجديًا)...">
-        <datalist id="absFacultyList-${idx}"></datalist>
+        <input class="absFaculty" type="text" autocomplete="off" placeholder="اكتب جزءًا من اسم العضو أو اختره من القائمة (مرتبة أبجديًا)...">
+        <div class="abs-faculty-suggest hidden"></div>
       </div>
       <div class="abs-lectures">${absenceLectureTemplate()}</div>
       <button type="button" class="btn-text abs-add-lecture">+ إضافة محاضرة أخرى لنفس العضو (نفس اليوم)</button>
@@ -2547,6 +2597,7 @@ function openAddAbsenceModal(editItem){
       if(names.length === 1 && input.value.trim() !== names[0]) input.value = names[0];
       trigger();
     });
+    attachFacultySuggest(input, getDeptId, trigger);
     trigger();
   }
 
