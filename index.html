@@ -486,6 +486,58 @@
   .storage-usage-stat-value{font-size:17px;font-weight:800;color:var(--seal-dark);}
   .storage-usage-stat-label{font-size:12px;color:var(--ink-soft);}
   .storage-usage-note{font-size:12px;color:var(--ink-soft);margin:0;}
+
+  /* ===== إدارة الجدول الدراسي ===== */
+  .schedule-mgmt-panel{margin-bottom:22px;padding:0;}
+  .schedule-mgmt-panel summary{
+    padding:14px 18px;font-family:'Noto Kufi Arabic',sans-serif;font-size:17px;
+    color:var(--seal-dark);cursor:pointer;display:flex;align-items:center;gap:10px;
+  }
+  .schedule-mgmt-panel[open] summary{border-bottom:1px solid var(--line);}
+  .schedule-mgmt-count-chip{
+    font-size:12px;font-weight:700;color:var(--seal-dark);background:var(--teal-tint);
+    padding:2px 10px;border-radius:12px;
+  }
+  .schedule-mgmt-body{padding:16px 18px;}
+  .schedule-mgmt-stats{display:flex;gap:28px;flex-wrap:wrap;margin-bottom:16px;}
+  .schedule-mgmt-stat{display:flex;flex-direction:column;}
+  .schedule-mgmt-stat b{font-size:18px;color:var(--seal-dark);}
+  .schedule-mgmt-stat span{font-size:12px;color:var(--ink-soft);}
+  .schedule-mgmt-toolbar{margin-bottom:12px;}
+  .schedule-mgmt-toolbar .filters input[type="text"]{
+    border:1px solid var(--line);border-radius:var(--radius);
+    padding:6px 10px;font-size:13px;background:#fff;color:var(--ink);width:220px;
+  }
+  .schedule-mgmt-table-wrap{overflow-x:auto;}
+  table.schedule-mgmt-table{width:100%;border-collapse:collapse;font-size:13px;}
+  .schedule-mgmt-table th{
+    text-align:right;padding:9px 12px;font-size:11.5px;color:var(--ink-soft);
+    font-weight:600;border-bottom:1px solid var(--line);white-space:nowrap;
+  }
+  .schedule-mgmt-table td{padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap;}
+  .schedule-mgmt-table tr:last-child td{border-bottom:none;}
+  .schedule-mgmt-note{font-size:12px;color:var(--ink-soft);padding:10px 2px 0;}
+
+  /* ===== الاختيار من الجدول داخل نموذج الغياب ===== */
+  .abs-sched-picker{margin:8px 0;}
+  .abs-sched-label{display:block;font-size:11.5px;color:var(--ink-soft);margin-bottom:6px;}
+  .abs-sched-cards{display:flex;flex-direction:column;gap:6px;max-height:180px;overflow-y:auto;}
+  .abs-sched-card{
+    border:1px solid var(--line);border-radius:calc(var(--radius) - 4px);
+    padding:8px 10px;background:#fff;cursor:pointer;font-size:12px;
+  }
+  .abs-sched-card:hover{border-color:var(--teal);}
+  .abs-sched-card.active{border-color:var(--seal-dark);background:var(--teal-tint);}
+  .abs-sched-card-top{display:flex;justify-content:space-between;align-items:center;font-weight:700;color:var(--ink);}
+  .abs-sched-card-meta{color:var(--ink-soft);margin-top:3px;}
+  .abs-sched-hint{font-size:11.5px;color:var(--ink-soft);margin:8px 0;}
+  .abs-autofill-note{
+    display:flex;justify-content:space-between;align-items:center;
+    font-size:11px;color:var(--seal-dark);background:var(--teal-tint);
+    border-radius:calc(var(--radius) - 4px);padding:5px 10px;margin:-2px 0 8px;
+  }
+  .abs-autofill-note button{background:none;border:none;color:var(--seal-dark);font-size:11px;text-decoration:underline;padding:0;}
+  .field input.auto-filled, .field select.auto-filled{background:var(--teal-tint);color:var(--seal-dark);font-weight:600;}
 </style>
 </head>
 <body>
@@ -524,7 +576,7 @@ let inactivityTimer = null;
 let inactivityWatcherStarted = false;
 
 let sb = null;
-let state = { tasks:[], decisions:[], departments:[], weeklyReports:[], absences:[], remoteRequests:[], filterStatus:'all', filterDept:'all', searchText:'', currentUser:null, openDeptGroups:{ absence:new Set(), remote:new Set() } };
+let state = { tasks:[], decisions:[], departments:[], weeklyReports:[], absences:[], remoteRequests:[], courseSchedule:[], filterStatus:'all', filterDept:'all', searchText:'', currentUser:null, openDeptGroups:{ absence:new Set(), remote:new Set() }, scheduleMgmtDept:null, scheduleMgmtSearch:'' };
 
 function isConfigured(){
   return SUPABASE_URL && SUPABASE_URL.startsWith('http') && SUPABASE_ANON_KEY && SUPABASE_ANON_KEY.length > 10;
@@ -740,13 +792,14 @@ function startInactivityWatcher(){
 }
 
 async function loadAll(){
-  const [{data:tasks}, {data:decisions}, {data:departments}, {data:weeklyReports}, {data:absences}, {data:remoteRequests}] = await Promise.all([
+  const [{data:tasks}, {data:decisions}, {data:departments}, {data:weeklyReports}, {data:absences}, {data:remoteRequests}, {data:courseSchedule}] = await Promise.all([
     sb.from('tasks').select('*').order('due_date', {ascending:true, nullsFirst:false}),
     sb.from('decisions').select('*').eq('status','active').order('decision_date', {ascending:false}),
     sb.from('departments').select('*').order('name'),
     sb.from('weekly_reports').select('*').order('week_start', {ascending:false}),
     sb.from('faculty_absences').select('*').order('absence_date', {ascending:false}),
-    sb.from('remote_lecture_requests').select('*').order('lecture_date', {ascending:false})
+    sb.from('remote_lecture_requests').select('*').order('lecture_date', {ascending:false}),
+    sb.from('course_schedule').select('department_id,faculty_name,course_code,course_name,section_number,activity_type,day_of_week,time_from,time_to,room').order('faculty_name')
   ]);
   state.tasks = tasks || [];
   state.decisions = decisions || [];
@@ -754,6 +807,7 @@ async function loadAll(){
   state.weeklyReports = weeklyReports || [];
   state.absences = absences || [];
   state.remoteRequests = remoteRequests || [];
+  state.courseSchedule = courseSchedule || [];
   flagOverdueLocally();
   renderStats();
   renderTasks();
@@ -767,6 +821,7 @@ async function loadAll(){
   renderRemoteRequests();
   renderServicesArchive();
   renderRemoteArchive();
+  renderScheduleManagement();
 }
 
 function flagOverdueLocally(){
@@ -816,6 +871,8 @@ function renderShell(){
       </header>
 
       <section class="panel storage-usage-panel hidden" id="storageUsagePanel"></section>
+
+      <details class="panel schedule-mgmt-panel hidden" id="scheduleManagementPanel"></details>
 
       <section id="alertBanner" class="alert-banner hidden"></section>
 
@@ -1383,6 +1440,132 @@ async function renderStorageUsage(){
   }
 }
 
+/* ===== الجدول الدراسي (course_schedule) — إدارة وربط بنماذج الغياب ===== */
+
+const DAY_NAME_AR = { 1:'الأحد', 2:'الاثنين', 3:'الثلاثاء', 4:'الأربعاء', 5:'الخميس' };
+
+function scheduleRowsForDept(deptId){
+  if(!deptId || deptId === 'all') return state.courseSchedule;
+  return state.courseSchedule.filter(r => r.department_id === deptId);
+}
+
+// أسماء أعضاء هيئة التدريس (بدون تكرار) المسجّلين بجدول قسم معيّن، مرتّبة أبجديًا
+function facultyNamesForDept(deptId){
+  const names = new Set();
+  scheduleRowsForDept(deptId).forEach(r => { if(r.faculty_name) names.add(r.faculty_name); });
+  return [...names].sort((a,b) => a.localeCompare(b, 'ar'));
+}
+
+// محاضرات عضو معيّن داخل قسم معيّن (قد يكون له أكثر من محاضرة/شعبة)
+function scheduleRowsForFaculty(deptId, facultyName){
+  const target = normText(facultyName);
+  return scheduleRowsForDept(deptId).filter(r => normText(r.faculty_name) === target);
+}
+
+// تحويل وقت الجدول الدراسي (مثل "08:00") إلى نفس صيغة خيارات حقل "الوقت" بالنموذج
+function scheduleTimeToOptionLabel(hhmm){
+  if(!hhmm) return '';
+  const parts = String(hhmm).split(':');
+  if(parts.length < 2) return '';
+  let hour24 = parseInt(parts[0], 10);
+  let mm = parseInt(parts[1], 10);
+  if(isNaN(hour24) || isNaN(mm)) return '';
+  mm = Math.round(mm / 15) * 15;
+  if(mm === 60){ mm = 0; hour24 += 1; }
+  hour24 = hour24 % 24;
+  const period = hour24 < 12 ? 'صباحًا' : 'مساءً';
+  let hour12 = hour24 % 12; if(hour12 === 0) hour12 = 12;
+  const mmPad = String(mm).padStart(2, '0');
+  return `${hour12}:${mmPad} ${period}`;
+}
+
+function renderScheduleManagement(){
+  const panel = document.getElementById('scheduleManagementPanel');
+  if(!panel) return;
+
+  const role = state.currentUser.role;
+  if(role !== 'admin' && role !== 'unit_secretary'){
+    panel.classList.add('hidden');
+    panel.innerHTML = '';
+    return;
+  }
+  panel.classList.remove('hidden');
+
+  if(state.scheduleMgmtDept === null){
+    state.scheduleMgmtDept = state.departments[0] ? state.departments[0].id : 'all';
+  }
+  const deptFilter = state.scheduleMgmtDept;
+  const search = normText(state.scheduleMgmtSearch);
+
+  let rows = scheduleRowsForDept(deptFilter);
+  if(search){
+    rows = rows.filter(r =>
+      normText(r.faculty_name).includes(search) || normText(r.course_name).includes(search)
+    );
+  }
+
+  const total = state.courseSchedule.length;
+  const unlinked = state.courseSchedule.filter(r => !r.department_id).length;
+  const wasOpen = panel.open;
+
+  panel.innerHTML = `
+    <summary>📅 إدارة الجدول الدراسي <span class="schedule-mgmt-count-chip">${total}</span></summary>
+    <div class="schedule-mgmt-body">
+      <div class="schedule-mgmt-stats">
+        <div class="schedule-mgmt-stat"><b>${total}</b><span>إجمالي المحاضرات المسجّلة</span></div>
+        <div class="schedule-mgmt-stat"><b>${state.departments.length}</b><span>أقسام مرتبطة بالجدول</span></div>
+        <div class="schedule-mgmt-stat"><b>${unlinked}</b><span>محاضرات خارج الكلية (بدون قسم)</span></div>
+      </div>
+      <div class="schedule-mgmt-toolbar">
+        <div class="filters">
+          <select id="schedMgmtDept">
+            <option value="all" ${deptFilter==='all'?'selected':''}>كل الأقسام</option>
+            ${state.departments.map(d=>`<option value="${d.id}" ${deptFilter===d.id?'selected':''}>${escapeHtml(d.name)}</option>`).join('')}
+          </select>
+          <input type="text" id="schedMgmtSearch" placeholder="🔍 بحث بالاسم أو المادة..." value="${escapeHtml(state.scheduleMgmtSearch)}">
+        </div>
+      </div>
+      <div class="schedule-mgmt-table-wrap">
+        <table class="schedule-mgmt-table">
+          <thead>
+            <tr>
+              <th>عضو هيئة التدريس</th><th>المادة</th><th>الرمز</th><th>الشعبة</th>
+              <th>النشاط</th><th>اليوم</th><th>الوقت</th><th>القاعة</th><th>القسم</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.length === 0 ? `<tr class="empty-row"><td colspan="9">لا توجد نتائج مطابقة.</td></tr>` :
+              rows.slice(0, 500).map(r => `
+                <tr>
+                  <td>${escapeHtml(r.faculty_name || '—')}</td>
+                  <td>${escapeHtml(r.course_name || '—')}</td>
+                  <td>${escapeHtml(r.course_code || '—')}</td>
+                  <td>${escapeHtml(r.section_number || '—')}</td>
+                  <td>${escapeHtml(r.activity_type || '—')}</td>
+                  <td>${DAY_NAME_AR[r.day_of_week] || '—'}</td>
+                  <td>${escapeHtml(r.time_from || '')} - ${escapeHtml(r.time_to || '')}</td>
+                  <td>${escapeHtml(r.room || '—')}</td>
+                  <td>${r.department_id ? escapeHtml(deptName(r.department_id)) : 'خارج الكلية'}</td>
+                </tr>`).join('')
+            }
+          </tbody>
+        </table>
+        ${rows.length > 500 ? `<p class="schedule-mgmt-note">تم عرض أول 500 نتيجة من أصل ${rows.length} — استخدم البحث لتضييق النتائج.</p>` : ''}
+      </div>
+    </div>`;
+
+  panel.open = wasOpen;
+
+  document.getElementById('schedMgmtDept').onchange = e=>{
+    state.scheduleMgmtDept = e.target.value;
+    renderScheduleManagement();
+  };
+  document.getElementById('schedMgmtSearch').addEventListener('input', e=>{
+    state.scheduleMgmtSearch = e.target.value;
+    renderScheduleManagement();
+  });
+}
+
 // مجموعة أدوات مشتركة لبناء "قائمة الأقسام المنسدلة" (Accordion) مع نقطة نابضة
 // تظهر فقط على الأقسام التي فيها عنصر بحالة "قيد المراجعة" (لم يُتخذ فيه قرار بعد).
 function isPendingItem(item){
@@ -1888,6 +2071,15 @@ function absenceLectureTemplate(){
         <span class="abs-lecture-title">محاضرة</span>
         <button type="button" class="abs-lecture-remove">🗑 حذف المحاضرة</button>
       </div>
+      <div class="abs-sched-hint">اختر عضو هيئة التدريس أولاً — إن وُجدت له محاضرات بالجدول الدراسي ستظهر هنا لاختيارها تلقائيًا.</div>
+      <div class="abs-sched-picker hidden">
+        <label class="abs-sched-label">اختر المحاضرة من جدول العضو</label>
+        <div class="abs-sched-cards"></div>
+      </div>
+      <div class="abs-autofill-note hidden">
+        <span>✓ تم التعبئة تلقائيًا من الجدول الدراسي</span>
+        <button type="button" class="abs-autofill-edit">تعديل يدوي</button>
+      </div>
       <div class="field"><label>اسم المادة <span class="required-mark">*</span></label><input class="absCourse" type="text"></div>
       <div class="field"><label>رقم الشعبة <span class="required-mark">*</span></label><input class="absSection" type="text"></div>
       <div class="field"><label>تاريخ الغياب <span class="required-mark">*</span></label><input class="absDate" type="date"><div class="abs-hijri-hint"></div></div>
@@ -1909,7 +2101,11 @@ function absenceMemberTemplate(idx){
         <span class="abs-row-title">عضو ${idx + 1}</span>
         <button type="button" class="abs-row-remove abs-member-remove" data-idx="${idx}">🗑 حذف العضو</button>
       </div>
-      <div class="field"><label>عضو هيئة التدريس</label><input class="absFaculty" type="text"></div>
+      <div class="field abs-faculty-field">
+        <label>عضو هيئة التدريس</label>
+        <input class="absFaculty" type="text" list="absFacultyList-${idx}" autocomplete="off" placeholder="اكتب اسم العضو أو اختره من القائمة (مرتبة أبجديًا)...">
+        <datalist id="absFacultyList-${idx}"></datalist>
+      </div>
       <div class="abs-lectures">${absenceLectureTemplate()}</div>
       <button type="button" class="btn-text abs-add-lecture">+ إضافة محاضرة أخرى لنفس العضو (نفس اليوم)</button>
     </div>`;
@@ -1944,6 +2140,91 @@ function openAddAbsenceModal(){
 
   const rowsContainer = document.getElementById('absRowsContainer');
 
+  function getDeptId(){
+    return isFullEditor
+      ? (document.getElementById('absDept') ? document.getElementById('absDept').value : '')
+      : state.currentUser.department_id;
+  }
+
+  function refreshFacultyDatalist(memberEl){
+    const dl = memberEl.querySelector('datalist');
+    if(!dl) return;
+    const names = facultyNamesForDept(getDeptId());
+    dl.innerHTML = names.map(n=>`<option value="${escapeHtml(n)}"></option>`).join('');
+  }
+
+  function applyScheduleCardsToLecture(lecEl, rows, hasFaculty){
+    const picker = lecEl.querySelector('.abs-sched-picker');
+    const hint = lecEl.querySelector('.abs-sched-hint');
+    const cardsWrap = lecEl.querySelector('.abs-sched-cards');
+
+    if(!rows || rows.length === 0){
+      picker.classList.add('hidden');
+      hint.classList.remove('hidden');
+      hint.textContent = hasFaculty
+        ? 'لا توجد محاضرات مسجّلة لهذا الاسم في جدول القسم — يمكنك إدخال بيانات المحاضرة يدويًا بالأسفل.'
+        : 'اختر عضو هيئة التدريس أولاً — إن وُجدت له محاضرات بالجدول الدراسي ستظهر هنا لاختيارها تلقائيًا.';
+      cardsWrap.innerHTML = '';
+      return;
+    }
+
+    hint.classList.add('hidden');
+    picker.classList.remove('hidden');
+    cardsWrap.innerHTML = rows.map((r, i)=>`
+      <div class="abs-sched-card" data-i="${i}">
+        <div class="abs-sched-card-top"><span>${escapeHtml(r.course_name || '—')}</span><span>شعبة ${escapeHtml(r.section_number || '—')}</span></div>
+        <div class="abs-sched-card-meta">${DAY_NAME_AR[r.day_of_week] || ''} · ${escapeHtml(r.time_from || '')} - ${escapeHtml(r.time_to || '')} · قاعة ${escapeHtml(r.room || '—')}</div>
+      </div>`).join('');
+
+    cardsWrap.querySelectorAll('.abs-sched-card').forEach(card=>{
+      card.onclick = ()=>{
+        const row = rows[parseInt(card.dataset.i, 10)];
+        cardsWrap.querySelectorAll('.abs-sched-card').forEach(c=>c.classList.remove('active'));
+        card.classList.add('active');
+
+        const courseEl = lecEl.querySelector('.absCourse');
+        const sectionEl = lecEl.querySelector('.absSection');
+        const roomEl = lecEl.querySelector('.absRoom');
+        const timeEl = lecEl.querySelector('.absTime');
+
+        courseEl.value = row.course_name || '';
+        sectionEl.value = row.section_number || '';
+        roomEl.value = row.room || '';
+        const label = scheduleTimeToOptionLabel(row.time_from);
+        if(label) timeEl.value = label;
+
+        [courseEl, sectionEl, roomEl].forEach(el=>{ el.readOnly = true; el.classList.add('auto-filled'); });
+        if(label && timeEl.value === label) timeEl.classList.add('auto-filled');
+
+        lecEl.querySelector('.abs-autofill-note').classList.remove('hidden');
+      };
+    });
+  }
+
+  function refreshLectureSchedule(lecEl, facultyName, deptId){
+    const rows = facultyName ? scheduleRowsForFaculty(deptId, facultyName) : [];
+    applyScheduleCardsToLecture(lecEl, rows, !!facultyName);
+  }
+
+  function refreshMemberSchedule(memberEl){
+    const facultyName = memberEl.querySelector('.absFaculty').value.trim();
+    const deptId = getDeptId();
+    memberEl.querySelectorAll('.abs-lecture').forEach(lecEl=>{
+      refreshLectureSchedule(lecEl, facultyName, deptId);
+    });
+  }
+
+  function bindMemberFacultyInput(memberEl){
+    const input = memberEl.querySelector('.absFaculty');
+    if(input.dataset.schedBound) return;
+    input.dataset.schedBound = '1';
+    refreshFacultyDatalist(memberEl);
+    const trigger = ()=> refreshMemberSchedule(memberEl);
+    input.addEventListener('input', trigger);
+    input.addEventListener('change', trigger);
+    trigger();
+  }
+
   function rebindLectureButtons(lecturesContainer){
     lecturesContainer.querySelectorAll('.abs-lecture-remove').forEach(btn=>{
       btn.onclick = ()=>{
@@ -1960,6 +2241,21 @@ function openAddAbsenceModal(){
         hint.textContent = dateInput.value ? hijriDate(dateInput.value) : '';
       });
     });
+    lecturesContainer.querySelectorAll('.abs-autofill-edit').forEach(btn=>{
+      if(btn.dataset.bound) return;
+      btn.dataset.bound = '1';
+      btn.onclick = ()=>{
+        const lecEl = btn.closest('.abs-lecture');
+        ['.absCourse', '.absSection', '.absRoom'].forEach(sel=>{
+          const el = lecEl.querySelector(sel);
+          el.readOnly = false;
+          el.classList.remove('auto-filled');
+        });
+        lecEl.querySelector('.absTime').classList.remove('auto-filled');
+        lecEl.querySelector('.abs-autofill-note').classList.add('hidden');
+        lecEl.querySelectorAll('.abs-sched-card').forEach(c=>c.classList.remove('active'));
+      };
+    });
     renumberLectures(lecturesContainer);
   }
 
@@ -1972,14 +2268,31 @@ function openAddAbsenceModal(){
     });
     rowsContainer.querySelectorAll('.abs-add-lecture').forEach(btn=>{
       btn.onclick = ()=>{
-        const lecturesContainer = btn.closest('.abs-member').querySelector('.abs-lectures');
+        const memberEl = btn.closest('.abs-member');
+        const lecturesContainer = memberEl.querySelector('.abs-lectures');
         lecturesContainer.insertAdjacentHTML('beforeend', absenceLectureTemplate());
         rebindLectureButtons(lecturesContainer);
+        const newLecEl = lecturesContainer.querySelector('.abs-lecture:last-child');
+        const facultyName = memberEl.querySelector('.absFaculty').value.trim();
+        refreshLectureSchedule(newLecEl, facultyName, getDeptId());
       };
     });
     rowsContainer.querySelectorAll('.abs-lectures').forEach(rebindLectureButtons);
+    rowsContainer.querySelectorAll('.abs-member').forEach(bindMemberFacultyInput);
   }
   rebindMemberButtons();
+
+  if(isFullEditor){
+    const deptSelect = document.getElementById('absDept');
+    if(deptSelect){
+      deptSelect.onchange = ()=>{
+        rowsContainer.querySelectorAll('.abs-member').forEach(memberEl=>{
+          refreshFacultyDatalist(memberEl);
+          refreshMemberSchedule(memberEl);
+        });
+      };
+    }
+  }
 
   document.getElementById('absAddRow').onclick = ()=>{
     memberCount++;
