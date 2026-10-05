@@ -811,6 +811,24 @@ function startInactivityWatcher(){
   resetInactivityTimer();
 }
 
+// Supabase يرجّع 1000 صف كحد أقصى في الطلب الواحد، والجدول الدراسي أكبر من ذلك (2881 صف)،
+// فنجلبه على دفعات متتالية حتى ينتهي، وإلا ضاعت الأسماء الواقعة بعد أول 1000 صف.
+async function fetchAllCourseSchedule(){
+  const PAGE = 1000;
+  const all = [];
+  let from = 0;
+  for(let guard = 0; guard < 50; guard++){
+    const { data, error } = await sb.from('course_schedule')
+      .select('id,department_id,faculty_name,course_code,course_name,section_number,activity_type,day_of_week,time_from,time_to,room')
+      .order('id', { ascending: true })
+      .range(from, from + PAGE - 1);
+    if(error || !data || data.length === 0) break;
+    all.push(...data);
+    from += data.length; // نتقدّم بعدد ما وصل فعلًا، حتى لو كان حد الخادم أقل من 1000
+  }
+  return { data: all };
+}
+
 async function loadAll(){
   const [{data:tasks}, {data:decisions}, {data:departments}, {data:weeklyReports}, {data:absences}, {data:remoteRequests}, {data:courseSchedule}] = await Promise.all([
     sb.from('tasks').select('*').order('due_date', {ascending:true, nullsFirst:false}),
@@ -819,7 +837,7 @@ async function loadAll(){
     sb.from('weekly_reports').select('*').order('week_start', {ascending:false}),
     sb.from('faculty_absences').select('*').order('absence_date', {ascending:false}),
     sb.from('remote_lecture_requests').select('*').order('lecture_date', {ascending:false}),
-    sb.from('course_schedule').select('department_id,faculty_name,course_code,course_name,section_number,activity_type,day_of_week,time_from,time_to,room').order('faculty_name')
+    fetchAllCourseSchedule()
   ]);
   state.tasks = tasks || [];
   state.decisions = decisions || [];
