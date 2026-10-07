@@ -1342,7 +1342,7 @@ function normText(s){
   return (s || '').toString().trim().replace(/\s+/g, ' ');
 }
 
-// سحب الطلب من القسم: حذف نهائي — لا يبقى له أثر في السجل ولا الأرشيف ولا التقارير. السبب إلزامي قبل التنفيذ.
+// حذف الطلب من القسم: حذف نهائي — لا يبقى له أثر في السجل ولا الأرشيف ولا التقارير. السبب إلزامي قبل التنفيذ.
 function promptWithdrawReason(title, onConfirm){
   const overlay = document.getElementById('modalOverlay');
   overlay.classList.remove('hidden');
@@ -1350,11 +1350,11 @@ function promptWithdrawReason(title, onConfirm){
     <div class="modal">
       <h3>${escapeHtml(title)}</h3>
       <p style="color:var(--ink-soft);font-size:13px;margin-top:-6px;">سيتم حذف الطلب نهائيًا ولن يظهر في الأرشيف أو التقارير ولن يصل للمراجعة. يمكنك رفع طلب جديد لاحقًا إذا لزم.</p>
-      <div class="field"><label>سبب السحب <span class="required-mark">*</span></label><textarea id="wdReasonInput" placeholder="اكتب سبب سحب الطلب هنا..."></textarea></div>
+      <div class="field"><label>سبب الحذف <span class="required-mark">*</span></label><textarea id="wdReasonInput" placeholder="اكتب سبب حذف الطلب هنا..."></textarea></div>
       <p class="login-error hidden" id="wdErr"></p>
       <div class="modal-actions">
         <button class="btn-ghost" id="wdCancel">رجوع</button>
-        <button class="btn-danger" id="wdConfirm">تأكيد السحب</button>
+        <button class="btn-danger" id="wdConfirm">تأكيد الحذف</button>
       </div>
     </div>`;
   document.getElementById('wdCancel').onclick = closeModal;
@@ -1362,19 +1362,19 @@ function promptWithdrawReason(title, onConfirm){
     const reason = document.getElementById('wdReasonInput').value.trim();
     const errEl = document.getElementById('wdErr');
     if(!reason){
-      errEl.textContent = 'لازم تكتب سبب السحب.';
+      errEl.textContent = 'لازم تكتب سبب الحذف.';
       errEl.classList.remove('hidden');
       return;
     }
     const btn = document.getElementById('wdConfirm');
     if(btn.disabled) return;
     btn.disabled = true;
-    btn.textContent = 'جارٍ السحب...';
+    btn.textContent = 'جارٍ الحذف...';
     await onConfirm(reason);
   };
 }
 
-// ينفّذ السحب (حذف نهائي) بعد التأكد أن الطلب ما زال قيد المراجعة، ويحذف مرفقه من التخزين إن وجد
+// ينفّذ الحذف (حذف نهائي) بعد التأكد أن الطلب ما زال قيد المراجعة، ويحذف مرفقه من التخزين إن وجد
 async function withdrawRecord(table, id){
   const { data: cur } = await sb.from(table).select('*').eq('id', id).single();
   if(!cur){
@@ -1384,13 +1384,13 @@ async function withdrawRecord(table, id){
   }
   if(!isPendingItem(cur)){
     closeModal();
-    alert('تم اتخاذ قرار على هذا الطلب، فلا يمكن سحبه الآن.');
+    alert('تم اتخاذ قرار على هذا الطلب، فلا يمكن حذفه الآن.');
     await loadAll();
     return;
   }
   const { error } = await sb.from(table).delete().eq('id', id);
   if(error){
-    alert('تعذر سحب الطلب، حاول مرة أخرى.');
+    alert('تعذر حذف الطلب، حاول مرة أخرى.');
     closeModal();
     return;
   }
@@ -1399,7 +1399,7 @@ async function withdrawRecord(table, id){
   }
   closeModal();
   await loadAll();
-  alert('تم سحب الطلب بنجاح');
+  alert('تم حذف الطلب بنجاح');
 }
 
 // يبحث عن طلب غياب مطابق مسجّل مسبقًا لنفس العضو/المادة/التاريخ/الوقت في نفس القسم
@@ -1823,7 +1823,7 @@ function renderAbsences(){
   const decisionBlock = (item, kind) => {
     if(item.status === 'مقبول') return `<span class="badge-inline badge-approved">✅ مقبول</span>`;
     if(item.status === 'مرفوض') return `<span class="badge-inline badge-rejected">❌ مرفوض</span>${item.decision_note ? `<div class="rejection-note">${escapeHtml(item.decision_note)}</div>` : ''}`;
-    const editBtn = `<button class="edit-record-btn" data-id="${item.id}" data-kind="${kind}">✏️ تعديل</button><button class="withdraw-record-btn" data-id="${item.id}" data-kind="${kind}">↩️ سحب الطلب</button>`;
+    const editBtn = `<button class="edit-record-btn" data-id="${item.id}" data-kind="${kind}">✏️ تعديل</button><button class="withdraw-record-btn" data-id="${item.id}" data-kind="${kind}">🗑️ حذف الطلب</button>`;
     if(isFullEditor) return `<div class="decision-actions"><button class="decide-btn" data-id="${item.id}" data-kind="${kind}" data-action="مقبول">✅ قبول</button><button class="reject-btn" data-id="${item.id}" data-kind="${kind}">❌ رفض</button>${editBtn}</div>`;
     return `<span class="badge-inline badge-pending">📋 قيد المراجعة</span> ${editBtn}`;
   };
@@ -1874,7 +1874,7 @@ function renderAbsences(){
   });
   panel.querySelectorAll('.withdraw-record-btn[data-kind="absence"]').forEach(btn=>{
     btn.onclick = ()=>{
-      promptWithdrawReason('سحب تقرير الغياب', ()=> withdrawRecord('faculty_absences', btn.dataset.id));
+      promptWithdrawReason('حذف تقرير الغياب', ()=> withdrawRecord('faculty_absences', btn.dataset.id));
     };
   });
 
@@ -1915,7 +1915,7 @@ function renderRemoteRequests(){
   const decisionBlock = (item, kind) => {
     if(item.status === 'مقبول') return `<span class="badge-inline badge-approved">✅ مقبول</span>`;
     if(item.status === 'مرفوض') return `<span class="badge-inline badge-rejected">❌ مرفوض</span>${item.decision_note ? `<div class="rejection-note">${escapeHtml(item.decision_note)}</div>` : ''}`;
-    const editBtn = `<button class="edit-record-btn" data-id="${item.id}" data-kind="${kind}">✏️ تعديل</button><button class="withdraw-record-btn" data-id="${item.id}" data-kind="${kind}">↩️ سحب الطلب</button>`;
+    const editBtn = `<button class="edit-record-btn" data-id="${item.id}" data-kind="${kind}">✏️ تعديل</button><button class="withdraw-record-btn" data-id="${item.id}" data-kind="${kind}">🗑️ حذف الطلب</button>`;
     if(isFullEditor) return `<div class="decision-actions"><button class="decide-btn" data-id="${item.id}" data-kind="${kind}" data-action="مقبول">✅ قبول</button><button class="reject-btn" data-id="${item.id}" data-kind="${kind}">❌ رفض</button>${editBtn}</div>`;
     return `<span class="badge-inline badge-pending">📋 قيد المراجعة</span> ${editBtn}`;
   };
@@ -1963,7 +1963,7 @@ function renderRemoteRequests(){
   });
   panel.querySelectorAll('.withdraw-record-btn[data-kind="remote"]').forEach(btn=>{
     btn.onclick = ()=>{
-      promptWithdrawReason('سحب طلب التحويل إلى عن بعد', ()=> withdrawRecord('remote_lecture_requests', btn.dataset.id));
+      promptWithdrawReason('حذف طلب التحويل إلى عن بعد', ()=> withdrawRecord('remote_lecture_requests', btn.dataset.id));
     };
   });
 
@@ -2800,13 +2800,7 @@ function openAddAbsenceModal(editItem){
           errEl.classList.remove('hidden');
           return;
         }
-        const absType = lecEl.querySelector('.absType').value;
-        const hasExistingDoc = !!(editItem && editItem.document_path);
-        if(absType === 'بعذر' && lecEl.querySelector('.absFile').files.length === 0 && !hasExistingDoc){
-          errEl.textContent = 'مستند الغياب إلزامي لحالة "بعذر" — ارفع ملف العذر قبل الحفظ.';
-          errEl.classList.remove('hidden');
-          return;
-        }
+        // المرفق اختياري في كل الحالات (بعذر / بدون عذر)
       }
     }
 
