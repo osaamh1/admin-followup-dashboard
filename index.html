@@ -908,7 +908,7 @@ function renderShell(){
           <div class="mast-controls">
             <button class="btn-ghost ${EDITOR_ROLES.includes(state.currentUser.role) ? '' : 'hidden'}" id="refreshOverdueBtn">تحديث الحالات المتأخرة</button>
             <button class="btn-ghost ${state.currentUser.role !== 'department' ? '' : 'hidden'}" id="pendingSummaryBtn">🗂️ ملخص للعميد</button>
-            <button class="btn-ghost ${state.currentUser.role !== 'department' ? '' : 'hidden'}" id="genReportBtn">📄 إصدار تقرير</button>
+            <button class="btn-ghost" id="genReportBtn">📄 إصدار تقرير</button>
             <button class="btn-ghost" id="changePassBtn">🔒 تغيير كلمة المرور</button>
             <button class="logout-btn" id="logoutBtn">🚪 خروج</button>
           </div>
@@ -3398,13 +3398,17 @@ function openGenerateReportModal(){
   const today = new Date().toISOString().slice(0,10);
   const monthAgo = (()=>{ const d=new Date(); d.setDate(d.getDate()-30); return d.toISOString().slice(0,10); })();
   const overlay = document.getElementById('modalOverlay');
+  const isDeptUser = state.currentUser.role === 'department';
   overlay.classList.remove('hidden');
   overlay.innerHTML = `
     <div class="modal">
-      <h3>إصدار تقرير الفترة</h3>
-      <div class="field"><label>القسم</label>
+      <h3>${isDeptUser ? 'إصدار تقرير القسم' : 'إصدار تقرير الفترة'}</h3>
+      ${isDeptUser
+        ? `<p style="color:var(--ink-soft);font-size:13px;margin-top:-6px;">يشمل التقرير تقارير الغياب وطلبات تحويل المحاضرات التي صدر فيها قرار (مقبول أو مرفوض) مع أسباب الرفض، خلال الفترة التي تحددها.</p>
+           <input type="hidden" id="repDept" value="${state.currentUser.department_id}">`
+        : `<div class="field"><label>القسم</label>
         <select id="repDept"><option value="">كل الأقسام</option>${state.departments.map(d=>`<option value="${d.id}">${d.name}</option>`).join('')}</select>
-      </div>
+      </div>`}
       <div class="field"><label>من تاريخ</label><input id="repStart" type="date" value="${monthAgo}"></div>
       <div class="field"><label>إلى تاريخ</label><input id="repEnd" type="date" value="${today}"></div>
       <div class="modal-actions">
@@ -3416,7 +3420,8 @@ function openGenerateReportModal(){
   document.getElementById('repGenerate').onclick = ()=>{
     const start = document.getElementById('repStart').value;
     const end = document.getElementById('repEnd').value;
-    const deptId = document.getElementById('repDept').value || null;
+    // رئيس القسم: التقرير مقيّد دائمًا بقسمه هو
+    const deptId = (isDeptUser ? state.currentUser.department_id : document.getElementById('repDept').value) || null;
     if(!start || !end || end < start){
       alert('تأكد من اختيار تاريخ بداية ونهاية صحيحين.');
       return;
@@ -3630,7 +3635,15 @@ function generatePeriodReport(start, end, deptId){
     approvedReports = approvedReports.filter(r => r.department_id === deptId);
     absences = absences.filter(a => a.department_id === deptId);
     remoteRequests = remoteRequests.filter(r => r.department_id === deptId);
+    // تقرير القسم: الطلبات التي صدر فيها قرار فقط (مقبول / مرفوض)
+    const decided = x => x.status === 'مقبول' || x.status === 'مرفوض';
+    absences = absences.filter(decided);
+    remoteRequests = remoteRequests.filter(decided);
   }
+  const acceptedCount = absences.filter(a => a.status === 'مقبول').length + remoteRequests.filter(r => r.status === 'مقبول').length;
+  const rejectedCount = absences.filter(a => a.status === 'مرفوض').length + remoteRequests.filter(r => r.status === 'مرفوض').length;
+  const decisionCell = x => x.status === 'مرفوض' ? '<span class="dec-no">مرفوض</span>' : '<span class="dec-ok">مقبول</span>';
+  const reasonCell = x => x.status === 'مرفوض' ? escapeHtml(x.decision_note || '—') : '—';
   const scopeLabel = deptId ? deptName(deptId) : 'كل الأقسام';
 
   const tasksByDept = {};
@@ -3696,6 +3709,10 @@ function generatePeriodReport(start, end, deptId){
   table.absences-tbl tbody tr.row-excused{background:var(--green-tint);}
   table.absences-tbl tbody tr.row-unexcused{background:var(--redd-tint);}
   .hijri-inline{font-size:11px;color:var(--ink-soft);white-space:nowrap;display:block;}
+  .dec-ok{color:var(--green);font-weight:700;}
+  .dec-no{color:var(--redd);font-weight:700;}
+  table.dept-tbl tbody tr{background:#fff;}
+  table.dept-tbl tbody tr:nth-child(even){background:#F7F6F0;}
   .dept-breakdown{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;}
   .dept-chip{
     background:var(--green);color:#fff;padding:7px 16px;border-radius:20px;
@@ -3745,7 +3762,7 @@ function generatePeriodReport(start, end, deptId){
 
   <div class="report-header">
     <div>
-      <h1>تقرير أداء وحدة المتابعة الإدارية</h1>
+      <h1>${deptId ? 'تقرير القسم — الغياب وتحويل المحاضرات' : 'تقرير أداء وحدة المتابعة الإدارية'}</h1>
       <div class="report-sub">كلية الشريعة — جامعة القصيم</div>
     </div>
     <img src="${LOGO_DATA_URI}" alt="شعار الكلية">
@@ -3755,12 +3772,19 @@ function generatePeriodReport(start, end, deptId){
     <span class="period-badge">الفترة: ${start} ← ${end} — النطاق: ${scopeLabel}</span>
   </div>
 
+  ${deptId ? `
+  <div class="summary-strip">
+    <div class="summary-box"><div class="num">${absences.length}</div><div class="lbl">تقارير الغياب</div></div>
+    <div class="summary-box"><div class="num">${remoteRequests.length}</div><div class="lbl">طلبات تحويل المحاضرات</div></div>
+    <div class="summary-box"><div class="num">${acceptedCount}</div><div class="lbl">مقبولة</div></div>
+    <div class="summary-box"><div class="num">${rejectedCount}</div><div class="lbl">مرفوضة</div></div>
+  </div>` : `
   <div class="summary-strip">
     <div class="summary-box"><div class="num">${absences.length}</div><div class="lbl">تقرير أسبوعي معتمد</div></div>
     <div class="summary-box"><div class="num">${remoteRequests.length}</div><div class="lbl">طلبات تحويل المحاضرات</div></div>
     <div class="summary-box"><div class="num">${completedTasks.length}</div><div class="lbl">مهام منجزة</div></div>
     <div class="summary-box"><div class="num">${approvedReports.length}</div><div class="lbl">تقارير داعمة</div></div>
-  </div>
+  </div>`}
 
   ${deptId ? '' : `
   <section>
@@ -3774,19 +3798,21 @@ function generatePeriodReport(start, end, deptId){
   </section>`}
 
   <section>
-    <h2>تقرير القسم الأسبوعي (${absences.length})</h2>
-    ${absences.length === 0 ? `<div class="empty-note">لا توجد غيابات مسجّلة خلال هذه الفترة.</div>` : (
+    <h2>${deptId ? 'تقارير الغياب' : 'تقرير القسم الأسبوعي'} (${absences.length})</h2>
+    ${absences.length === 0 ? `<div class="empty-note">لا توجد غيابات ${deptId ? 'صدر فيها قرار' : 'مسجّلة'} خلال هذه الفترة.</div>` : (
       deptId ? `
-      <table class="absences-tbl">
-        <thead><tr><th>عضو هيئة التدريس</th><th>المادة</th><th>التاريخ</th><th>الوقت</th><th>نوع الغياب</th></tr></thead>
+      <table class="absences-tbl dept-tbl">
+        <thead><tr><th>عضو هيئة التدريس</th><th>المادة</th><th>التاريخ</th><th>الوقت</th><th>نوع الغياب</th><th>القرار</th><th>سبب الرفض</th></tr></thead>
         <tbody>
           ${absences.map(a=>`
-            <tr class="${a.absence_type === 'بعذر' ? 'row-excused' : 'row-unexcused'}">
+            <tr>
               <td>${escapeHtml(a.faculty_name)}</td>
               <td>${escapeHtml(a.course_name || '—')}</td>
               <td>${dualDateLabel(a.absence_date)}</td>
               <td>${escapeHtml(a.absence_time || '—')}</td>
               <td>${escapeHtml(a.absence_type || '—')}</td>
+              <td>${decisionCell(a)}</td>
+              <td>${reasonCell(a)}</td>
             </tr>`).join('')}
         </tbody>
       </table>` : (()=>{
@@ -3819,10 +3845,10 @@ function generatePeriodReport(start, end, deptId){
 
   <section>
     <h2>طلبات تحويل المحاضرات (${remoteRequests.length})</h2>
-    ${remoteRequests.length === 0 ? `<div class="empty-note">لا توجد طلبات تحويل خلال هذه الفترة.</div>` : (
+    ${remoteRequests.length === 0 ? `<div class="empty-note">لا توجد طلبات تحويل ${deptId ? 'صدر فيها قرار' : ''} خلال هذه الفترة.</div>` : (
       deptId ? `
-      <table class="reports-tbl">
-        <thead><tr><th>عضو هيئة التدريس</th><th>المادة</th><th>التاريخ</th><th>الوقت</th><th>القرار</th></tr></thead>
+      <table class="reports-tbl dept-tbl">
+        <thead><tr><th>عضو هيئة التدريس</th><th>المادة</th><th>التاريخ</th><th>الوقت</th><th>القرار</th><th>سبب الرفض</th></tr></thead>
         <tbody>
           ${remoteRequests.map(r=>`
             <tr>
@@ -3830,7 +3856,8 @@ function generatePeriodReport(start, end, deptId){
               <td>${escapeHtml(r.course_name || '—')}</td>
               <td>${dualDateLabel(r.lecture_date)}</td>
               <td>${escapeHtml(r.lecture_time || '—')}</td>
-              <td>${escapeHtml(r.status || 'قيد المراجعة')}</td>
+              <td>${decisionCell(r)}</td>
+              <td>${reasonCell(r)}</td>
             </tr>`).join('')}
         </tbody>
       </table>` : (()=>{
@@ -3861,6 +3888,7 @@ function generatePeriodReport(start, end, deptId){
     )}
   </section>
 
+  ${deptId ? '' : `
   <section>
     <h2>تفصيل المهام المنجزة (${completedTasks.length})</h2>
     ${completedTasks.length === 0 ? `<div class="empty-note">لا توجد مهام منجزة خلال هذه الفترة.</div>` : `
@@ -3893,7 +3921,7 @@ function generatePeriodReport(start, end, deptId){
           </tr>`).join('')}
       </tbody>
     </table>`}
-  </section>
+  </section>`}
 
 
   <div class="report-footer">
