@@ -7,6 +7,15 @@
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>وحدة المتابعة الإدارية</title>
+<meta property="og:type" content="website">
+<meta property="og:locale" content="ar_SA">
+<meta property="og:title" content="منصة وحدة المتابعة الإدارية">
+<meta property="og:description" content="جامعة القصيم - كلية الشريعة">
+<meta property="og:url" content="https://osaamh1.github.io/admin-followup-dashboard/">
+<meta property="og:image" content="https://osaamh1.github.io/admin-followup-dashboard/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@500;700;900&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -3623,6 +3632,44 @@ async function generatePendingDecisionsSummary(){
   w.document.close();
 }
 
+// حفظ التقرير كملف HTML تفاعلي مع تضمين الخطوط داخل الملف (ليظهر بنفس الخطوط دون إنترنت)
+async function afuSaveReportHtml(doc, fileName, btn){
+  const oldLabel = btn ? btn.textContent : '';
+  if(btn){ btn.disabled = true; btn.textContent = 'جارٍ تجهيز الملف...'; }
+  const c = doc.documentElement.cloneNode(true);
+  const pb = c.querySelector('.print-bar'); if(pb) pb.remove();
+  const ph = c.querySelector('.print-hint'); if(ph) ph.remove();
+  try{
+    const link = c.querySelector('link[href*="fonts.googleapis.com/css2"]');
+    if(link){
+      const css = await (await fetch(link.href)).text();
+      const blocks = (css.match(/\/\*[^*]*\*\/\s*@font-face\s*\{[^}]*\}/g) || [])
+        .filter(b => /\/\*\s*(arabic|latin)\s*\*\//.test(b));
+      const toData = blob => new Promise((res, rej)=>{ const r = new FileReader(); r.onload = ()=>res(r.result); r.onerror = rej; r.readAsDataURL(blob); });
+      const out = [];
+      for(const b of blocks){
+        const m = b.match(/url\(([^)]+)\)/);
+        if(!m){ continue; }
+        const u = m[1].replace(/["']/g, '');
+        const data = await toData(await (await fetch(u)).blob());
+        out.push(b.replace(m[0], 'url(' + data + ')'));
+      }
+      if(out.length){
+        const st = doc.createElement('style');
+        st.textContent = out.join('\n');
+        link.replaceWith(st);
+      }
+    }
+  }catch(e){ /* عند الفشل يبقى رابط الخطوط الأصلي */ }
+  const blob = new Blob(['<!DOCTYPE html>' + c.outerHTML], {type:'text/html'});
+  const a = doc.createElement('a');
+  a.href = window.URL.createObjectURL(blob);
+  a.download = fileName;
+  doc.body.appendChild(a); a.click(); a.remove();
+  if(btn){ btn.disabled = false; btn.textContent = oldLabel; }
+}
+window.afuSaveReportHtml = afuSaveReportHtml;
+
 function generatePeriodReport(start, end, deptId){
   const inRange = (dateStr) => dateStr && dateStr.slice(0,10) >= start && dateStr.slice(0,10) <= end;
 
@@ -3763,7 +3810,7 @@ function generatePeriodReport(start, end, deptId){
 <body>
   <div class="print-bar">
     <button onclick="document.querySelectorAll('details').forEach(function(d){d.open=false});window.print()">🖨 طباعة مختصرة (الأقسام مطوية)</button>
-    <button class="btn-alt" onclick="var c=document.documentElement.cloneNode(true);var pb=c.querySelector('.print-bar');if(pb)pb.remove();var ph=c.querySelector('.print-hint');if(ph)ph.remove();var b=new Blob(['<!DOCTYPE html>'+c.outerHTML],{type:'text/html'});var a=document.createElement('a');a.href=window.URL.createObjectURL(b);a.download='AFU-report_${start}_to_${end}${deptId ? '_department' : '_all-departments'}.html';document.body.appendChild(a);a.click();a.remove();">💾 طباعة كملف تفاعلي (HTML)</button>
+    <button class="btn-alt" onclick="if(window.opener&&window.opener.afuSaveReportHtml){window.opener.afuSaveReportHtml(document,'AFU-report_${start}_to_${end}${deptId ? '_department' : '_all-departments'}.html',this);}else{alert('أعد فتح التقرير من المنصة ثم احفظه.');}">💾 طباعة كملف تفاعلي (HTML)</button>
   </div>
   <div class="print-hint">الملف التفاعلي يُفتح في أي متصفح وتبقى فيه الأقسام قابلة للطي والفتح، وهو الأنسب للإرسال عبر الواتساب. أما ملف PDF فلا يدعم القوائم المنسدلة.</div>
   <div class="sheet">
