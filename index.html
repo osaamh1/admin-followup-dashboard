@@ -3580,7 +3580,6 @@ async function generatePendingDecisionsSummary(){
   }
   .print-bar button:hover{background:var(--redd);}
   @media print{
-    details::details-content{content-visibility:visible;}
     html{background:#fff;}
     .print-bar{display:none;}
     body{padding:0;}
@@ -3589,7 +3588,7 @@ async function generatePendingDecisionsSummary(){
 </style>
 </head>
 <body>
-  <div class="print-bar"><button onclick="document.querySelectorAll('details').forEach(function(d){d.open=true});window.print()">🖨 طباعة / حفظ PDF</button></div>
+  <div class="print-bar"><button onclick="window.print()">🖨 طباعة / حفظ PDF</button></div>
   <div class="sheet">
 
   <div class="report-header">
@@ -3660,7 +3659,7 @@ function generatePeriodReport(start, end, deptId){
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<title>تقرير الفترة — وحدة المتابعة الإدارية</title>
+<title>${deptId ? 'تقرير القسم' : 'تقرير الفترة'} — ${scopeLabel} — من ${start} إلى ${end}</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@500;700;900&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root{
@@ -3749,17 +3748,24 @@ function generatePeriodReport(start, end, deptId){
     box-shadow:0 3px 10px rgba(18,41,79,0.25);
   }
   .print-bar button:hover{background:var(--teal);}
+  .print-bar button + button{margin-inline-start:8px;}
+  .print-bar .btn-alt{background:#fff;color:var(--seal-dark);border:2px solid var(--seal-dark);padding:9px 20px;box-shadow:none;}
+  .print-bar .btn-alt:hover{background:var(--teal-tint);color:var(--seal-dark);}
+  .print-hint{max-width:900px;margin:8px auto 0;font-size:12.5px;color:var(--ink-soft);text-align:right;}
   @media print{
-    details::details-content{content-visibility:visible;}
     html{background:#fff;}
-    .print-bar{display:none;}
+    .print-bar,.print-hint{display:none;}
     body{padding:0;}
     .sheet{box-shadow:none;border-radius:0;max-width:none;border-top:6px solid var(--teal);}
   }
 </style>
 </head>
 <body>
-  <div class="print-bar"><button onclick="document.querySelectorAll('details').forEach(function(d){d.open=true});window.print()">🖨 طباعة / حفظ PDF</button></div>
+  <div class="print-bar">
+    <button onclick="document.querySelectorAll('details').forEach(function(d){d.open=false});window.print()">🖨 طباعة مختصرة (الأقسام مطوية)</button>
+    <button class="btn-alt" onclick="var c=document.documentElement.cloneNode(true);var pb=c.querySelector('.print-bar');if(pb)pb.remove();var ph=c.querySelector('.print-hint');if(ph)ph.remove();var b=new Blob(['<!DOCTYPE html>'+c.outerHTML],{type:'text/html'});var a=document.createElement('a');a.href=window.URL.createObjectURL(b);a.download='AFU-report_${start}_to_${end}${deptId ? '_department' : '_all-departments'}.html';document.body.appendChild(a);a.click();a.remove();">💾 طباعة كملف تفاعلي (HTML)</button>
+  </div>
+  <div class="print-hint">الملف التفاعلي يُفتح في أي متصفح وتبقى فيه الأقسام قابلة للطي والفتح، وهو الأنسب للإرسال عبر الواتساب. أما ملف PDF فلا يدعم القوائم المنسدلة.</div>
   <div class="sheet">
 
   <div class="report-header">
@@ -3824,7 +3830,7 @@ function generatePeriodReport(start, end, deptId){
           if(!byDept[key]) byDept[key] = [];
           byDept[key].push(a);
         });
-        return Object.entries(byDept).map(([dId, items])=>`
+        return Object.entries(byDept).sort((a,b)=>b[1].length-a[1].length).map(([dId, items])=>`
           <details class="dept-drilldown">
             <summary><span>${escapeHtml(deptName(dId))}</span><span class="dept-drilldown-count">${items.length} تقرير</span></summary>
             <table class="absences-tbl">
@@ -3869,7 +3875,7 @@ function generatePeriodReport(start, end, deptId){
           if(!byDept[key]) byDept[key] = [];
           byDept[key].push(r);
         });
-        return Object.entries(byDept).map(([dId, items])=>`
+        return Object.entries(byDept).sort((a,b)=>b[1].length-a[1].length).map(([dId, items])=>`
           <details class="dept-drilldown">
             <summary><span>${escapeHtml(deptName(dId))}</span><span class="dept-drilldown-count">${items.length} طلب</span></summary>
             <table class="reports-tbl">
