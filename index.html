@@ -3580,6 +3580,7 @@ async function generatePendingDecisionsSummary(){
   }
   .print-bar button:hover{background:var(--redd);}
   @media print{
+    details::details-content{content-visibility:visible;}
     html{background:#fff;}
     .print-bar{display:none;}
     body{padding:0;}
@@ -3588,7 +3589,7 @@ async function generatePendingDecisionsSummary(){
 </style>
 </head>
 <body>
-  <div class="print-bar"><button onclick="window.print()">🖨 طباعة / حفظ PDF</button></div>
+  <div class="print-bar"><button onclick="document.querySelectorAll('details').forEach(function(d){d.open=true});window.print()">🖨 طباعة / حفظ PDF</button></div>
   <div class="sheet">
 
   <div class="report-header">
@@ -3749,6 +3750,7 @@ function generatePeriodReport(start, end, deptId){
   }
   .print-bar button:hover{background:var(--teal);}
   @media print{
+    details::details-content{content-visibility:visible;}
     html{background:#fff;}
     .print-bar{display:none;}
     body{padding:0;}
@@ -3757,7 +3759,7 @@ function generatePeriodReport(start, end, deptId){
 </style>
 </head>
 <body>
-  <div class="print-bar"><button onclick="window.print()">🖨 طباعة / حفظ PDF</button></div>
+  <div class="print-bar"><button onclick="document.querySelectorAll('details').forEach(function(d){d.open=true});window.print()">🖨 طباعة / حفظ PDF</button></div>
   <div class="sheet">
 
   <div class="report-header">
