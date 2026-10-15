@@ -3820,15 +3820,21 @@ function generatePeriodReport(start, end, deptId){
   .bar-row{display:flex;align-items:center;gap:12px;margin:9px 0;}
   .bar-name{flex:0 0 150px;font-size:13.5px;font-weight:700;color:var(--seal-dark);}
   .bar-track{flex:1;height:22px;background:#EDEBE1;border-radius:11px;overflow:hidden;display:flex;}
-  .bar-fill{height:100%;background:linear-gradient(90deg,var(--teal),var(--seal-dark));border-radius:11px;transform-origin:right center;animation:growbar 1s cubic-bezier(.2,.7,.2,1) both;}
+  .bar-fill{height:100%;background:linear-gradient(90deg,var(--teal),var(--seal-dark));border-radius:11px;transform-origin:right center;animation:growloop 10s cubic-bezier(.2,.7,.2,1) infinite;}
   .bar-val{flex:0 0 40px;text-align:left;font-family:'Noto Kufi Arabic',sans-serif;font-weight:700;font-size:14px;color:var(--seal-dark);}
   .ratio-bar{display:flex;height:26px;border-radius:13px;overflow:hidden;background:#EDEBE1;}
-  .ratio-seg{height:100%;transform-origin:right center;animation:growbar 1s cubic-bezier(.2,.7,.2,1) both;}
+  .ratio-seg{height:100%;transform-origin:right center;animation:growloop 10s cubic-bezier(.2,.7,.2,1) infinite;}
   .ratio-ok{background:var(--green);} .ratio-no{background:var(--redd);} .ratio-wait{background:var(--amber);}
   .ratio-legend{display:flex;flex-wrap:wrap;gap:16px;margin-top:10px;font-size:13px;color:var(--ink-soft);font-weight:600;}
   .ratio-legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-inline-end:6px;vertical-align:-1px;}
   @keyframes rise{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:none;}}
-  @keyframes growbar{from{transform:scaleX(0);}to{transform:scaleX(1);}}
+  @keyframes growloop{0%{transform:scaleX(0);}12%{transform:scaleX(1);}100%{transform:scaleX(1);}}
+  @property --num{syntax:'<integer>';inherits:false;initial-value:0;}
+  @keyframes countloop{0%{--num:0;}12%{--num:var(--to);}100%{--num:var(--to);}}
+  .cnt{--num:var(--to);counter-reset:cn var(--num);font-size:0;animation:countloop 10s linear infinite;}
+  .summary-box .num.cnt,.bar-row .bar-val.cnt{font-size:0;}
+  .num.cnt::after{content:counter(cn);font-size:36px;}
+  .bar-val.cnt::after{content:counter(cn);font-size:14px;}
   .sheet{animation:rise .6s ease both;}
   .summary-box{animation:rise .6s ease both;}
   .summary-box:nth-child(2){animation-delay:.08s;} .summary-box:nth-child(3){animation-delay:.16s;} .summary-box:nth-child(4){animation-delay:.24s;}
@@ -3837,7 +3843,7 @@ function generatePeriodReport(start, end, deptId){
   @media (prefers-reduced-motion:reduce){*{animation:none !important;}}
   @media print{
     html{background:#fff;}
-    *{animation:none !important;}
+    *{animation:none !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
     .print-bar,.print-hint,.tools{display:none;}
     body{padding:0;}
     .sheet{box-shadow:none;border-radius:0;max-width:none;border-top:6px solid var(--teal);}
@@ -3866,13 +3872,13 @@ function generatePeriodReport(start, end, deptId){
   </div>
 
   <div class="summary-strip">
-    <div class="summary-box"><div class="num" data-count="${absences.length}">${absences.length}</div><div class="lbl">تقارير الغياب</div></div>
-    <div class="summary-box"><div class="num" data-count="${remoteRequests.length}">${remoteRequests.length}</div><div class="lbl">طلبات تحويل المحاضرات</div></div>
-    <div class="summary-box"><div class="num" data-count="${acceptedCount}">${acceptedCount}</div><div class="lbl">مقبولة</div></div>
-    <div class="summary-box"><div class="num" data-count="${rejectedCount}">${rejectedCount}</div><div class="lbl">مرفوضة</div></div>
+    <div class="summary-box"><div class="num cnt" style="--to:${absences.length}">${absences.length}</div><div class="lbl">تقارير الغياب</div></div>
+    <div class="summary-box"><div class="num cnt" style="--to:${remoteRequests.length}">${remoteRequests.length}</div><div class="lbl">طلبات تحويل المحاضرات</div></div>
+    <div class="summary-box"><div class="num cnt" style="--to:${acceptedCount}">${acceptedCount}</div><div class="lbl">مقبولة</div></div>
+    <div class="summary-box"><div class="num cnt" style="--to:${rejectedCount}">${rejectedCount}</div><div class="lbl">مرفوضة</div></div>
     ${showExtras ? `
-    <div class="summary-box"><div class="num" data-count="${completedTasks.length}">${completedTasks.length}</div><div class="lbl">مهام منجزة</div></div>
-    <div class="summary-box"><div class="num" data-count="${approvedReports.length}">${approvedReports.length}</div><div class="lbl">تقارير داعمة</div></div>` : ''}
+    <div class="summary-box"><div class="num cnt" style="--to:${completedTasks.length}">${completedTasks.length}</div><div class="lbl">مهام منجزة</div></div>
+    <div class="summary-box"><div class="num cnt" style="--to:${approvedReports.length}">${approvedReports.length}</div><div class="lbl">تقارير داعمة</div></div>` : ''}
   </div>
 
   ${totalReq > 0 ? `
@@ -3900,7 +3906,7 @@ function generatePeriodReport(start, end, deptId){
       <div class="bar-row">
         <div class="bar-name">${escapeHtml(deptName(dId))}</div>
         <div class="bar-track"><div class="bar-fill" style="width:${(n / maxDeptCount * 100).toFixed(1)}%"></div></div>
-        <div class="bar-val" data-count="${n}">${n}</div>
+        <div class="bar-val cnt" style="--to:${n}">${n}</div>
       </div>`).join('')}
     </div>
   </section>
@@ -4053,23 +4059,6 @@ function generatePeriodReport(start, end, deptId){
     <span>تاريخ الإصدار: ${new Date().toLocaleDateString('ar-SA')}</span>
   </div>
   </div>
-<script>
-(function(){
-  var nums = document.querySelectorAll('[data-count]');
-  function setFinal(){ for(var i=0;i<nums.length;i++){ nums[i].textContent = nums[i].getAttribute('data-count'); } }
-  window.addEventListener('beforeprint', setFinal);
-  if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches){ return; }
-  var dur = 1100, t0 = null;
-  for(var i=0;i<nums.length;i++){ nums[i].textContent = '0'; }
-  function step(ts){
-    if(t0 === null){ t0 = ts; }
-    var p = Math.min(1, (ts - t0) / dur), e = 1 - Math.pow(1 - p, 3);
-    for(var i=0;i<nums.length;i++){ nums[i].textContent = Math.round(Number(nums[i].getAttribute('data-count')) * e); }
-    if(p < 1){ requestAnimationFrame(step); } else { setFinal(); }
-  }
-  requestAnimationFrame(step);
-})();
-<\/script>
 </body>
 </html>`;
 
