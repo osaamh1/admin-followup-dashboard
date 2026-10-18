@@ -408,6 +408,22 @@
 
   /* ===== الرسم البياني لإنجاز الأقسام ===== */
   .dept-chart-panel{margin-bottom:22px;}
+  .noabs-panel{margin-bottom:22px;}
+  .head-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px;}
+  .btn-noabs{background:#fff;color:var(--teal);border:2px solid var(--teal);border-radius:8px;padding:9px 16px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;}
+  .btn-noabs:hover:not(:disabled){background:var(--teal);color:#fff;}
+  .btn-noabs:disabled{opacity:.5;cursor:not-allowed;}
+  .noabs-hint{font-size:12.5px;color:var(--ink-soft);font-weight:600;}
+  .noabs-done{display:inline-block;background:#DEF3F1;color:#0B5F57;border:1px solid #BFE6E1;border-radius:8px;padding:8px 14px;font-size:13.5px;font-weight:700;}
+  .noabs-summary{font-size:13.5px;color:var(--ink-soft);margin:0;padding:12px 20px 4px;font-weight:600;}
+  .noabs-grid{padding:10px 20px 20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;}
+  .noabs-card{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:#fff;display:flex;flex-direction:column;gap:8px;}
+  .noabs-card b{font-size:14.5px;color:var(--seal-dark);}
+  .noabs-st{display:inline-block;border-radius:20px;padding:4px 12px;font-size:12.5px;font-weight:700;align-self:flex-start;}
+  .noabs-st.st-abs{background:#FBEBD0;color:#8A5A12;}
+  .noabs-st.st-none{background:#DEF3F1;color:#0B5F57;}
+  .noabs-st.st-wait{background:#EDEBE1;color:#5A625E;}
+  .noabs-time{font-size:12px;color:var(--ink-soft);}
   .absences-panel, .remote-panel{margin-bottom:22px;}
   .remote-panel summary{
     padding:14px 18px;font-family:'Noto Kufi Arabic',sans-serif;font-size:17px;
@@ -613,7 +629,7 @@ let inactivityTimer = null;
 let inactivityWatcherStarted = false;
 
 let sb = null;
-let state = { tasks:[], decisions:[], departments:[], weeklyReports:[], absences:[], remoteRequests:[], courseSchedule:[], filterStatus:'all', filterDept:'all', searchText:'', currentUser:null, openDeptGroups:{ absence:new Set(), remote:new Set() }, scheduleMgmtDept:null, scheduleMgmtSearch:'' };
+let state = { tasks:[], decisions:[], departments:[], weeklyReports:[], absences:[], remoteRequests:[], noAbsence:[], noAbsWeek:null, courseSchedule:[], filterStatus:'all', filterDept:'all', searchText:'', currentUser:null, openDeptGroups:{ absence:new Set(), remote:new Set() }, scheduleMgmtDept:null, scheduleMgmtSearch:'' };
 
 function isConfigured(){
   return SUPABASE_URL && SUPABASE_URL.startsWith('http') && SUPABASE_ANON_KEY && SUPABASE_ANON_KEY.length > 10;
@@ -847,14 +863,15 @@ async function fetchAllCourseSchedule(){
 }
 
 async function loadAll(){
-  const [{data:tasks}, {data:decisions}, {data:departments}, {data:weeklyReports}, {data:absences}, {data:remoteRequests}, {data:courseSchedule}] = await Promise.all([
+  const [{data:tasks}, {data:decisions}, {data:departments}, {data:weeklyReports}, {data:absences}, {data:remoteRequests}, {data:courseSchedule}, {data:noAbsence}] = await Promise.all([
     sb.from('tasks').select('*').order('due_date', {ascending:true, nullsFirst:false}),
     sb.from('decisions').select('*').eq('status','active').order('decision_date', {ascending:false}),
     sb.from('departments').select('*').order('name'),
     sb.from('weekly_reports').select('*').order('week_start', {ascending:false}),
     sb.from('faculty_absences').select('*').order('absence_date', {ascending:false}),
     sb.from('remote_lecture_requests').select('*').order('lecture_date', {ascending:false}),
-    fetchAllCourseSchedule()
+    fetchAllCourseSchedule(),
+    sb.from('no_absence_declarations').select('*').order('week_start', {ascending:false}).limit(1000)
   ]);
   state.tasks = tasks || [];
   state.decisions = decisions || [];
@@ -863,6 +880,7 @@ async function loadAll(){
   state.absences = absences || [];
   state.remoteRequests = remoteRequests || [];
   state.courseSchedule = courseSchedule || [];
+  state.noAbsence = noAbsence || [];
   flagOverdueLocally();
   renderStats();
   renderTasks();
@@ -871,6 +889,7 @@ async function loadAll(){
   renderDeptFilter();
   // renderWeeklyPanel(); // تم إخفاء خدمة "تقارير داعمة" من الواجهة (البيانات محفوظة، يمكن إعادة تفعيلها لاحقًا)
   renderDeptChart();
+  renderNoAbsencePanel();
   renderStorageUsage();
   renderAbsences();
   renderRemoteRequests();
@@ -934,6 +953,8 @@ function renderShell(){
       <section class="stat-strip" id="statStrip"></section>
 
       <section class="panel dept-chart-panel hidden" id="deptChartPanel"></section>
+
+      <section class="panel noabs-panel hidden" id="noAbsPanel"></section>
 
       <section class="panel absences-panel" id="absencesPanel"></section>
 
@@ -1070,7 +1091,7 @@ function renderStats(){
 }
 
 function deptName(id){
-  const d = state.departments.find(d=>d.id===id);
+  const d = state.departments.find(d=>String(d.id)===String(id));
   return d ? d.name : '—';
 }
 
@@ -1820,6 +1841,107 @@ function wireDeptAccordionToggles(panel, kind, onRerender){
   });
 }
 
+// ===== خاصية "لا يوجد غياب" (الخميس 12 ظهرًا حتى نهاية السبت — بتوقيت السعودية) =====
+function riyadhParts(now){
+  now = now || new Date();
+  const p = {};
+  new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Riyadh',weekday:'short',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',hour12:false}).formatToParts(now).forEach(x=>{ p[x.type] = x.value; });
+  const dowMap = {Sun:0,Mon:1,Tue:2,Wed:3,Thu:4,Fri:5,Sat:6};
+  let hour = parseInt(p.hour,10); if(hour === 24) hour = 0;
+  return { dow: dowMap[p.weekday], hour, iso: p.year+'-'+p.month+'-'+p.day };
+}
+function addDaysISO(iso, n){
+  const d = new Date(iso+'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate()+n);
+  return d.toISOString().slice(0,10);
+}
+function weekStartOfISO(iso){
+  const d = new Date(iso+'T00:00:00Z');
+  return addDaysISO(iso, -d.getUTCDay());
+}
+function currentWeekStartISO(now){ return weekStartOfISO(riyadhParts(now).iso); }
+function isNoAbsenceWindowOpen(now){
+  const r = riyadhParts(now);
+  return (r.dow === 4 && r.hour >= 12) || r.dow === 5 || r.dow === 6;
+}
+function getNoAbsenceStatus(deptId, weekStart){
+  const declared = (state.noAbsence || []).find(r => String(r.department_id) === String(deptId) && r.week_start === weekStart) || null;
+  const weekEnd = addDaysISO(weekStart, 6);
+  const absCount = state.absences.filter(a => String(a.department_id) === String(deptId) && a.absence_date && a.absence_date.slice(0,10) >= weekStart && a.absence_date.slice(0,10) <= weekEnd).length;
+  return { declared, absCount };
+}
+
+async function submitNoAbsence(){
+  const u = state.currentUser;
+  if(!u || u.role !== 'department') return;
+  if(!isNoAbsenceWindowOpen()){
+    alert('هذه الخاصية متاحة من الخميس الساعة 12 ظهرًا حتى نهاية يوم السبت.');
+    renderAbsences();
+    return;
+  }
+  const ws = currentWeekStartISO();
+  const st = getNoAbsenceStatus(u.department_id, ws);
+  if(st.declared){ alert('سبق إرسال إفادة «لا يوجد غياب» لهذا الأسبوع.'); renderAbsences(); return; }
+  if(st.absCount > 0){ alert('لديكم غياب مرفوع هذا الأسبوع، فلا يمكن إرسال إفادة بعدم وجود غياب.'); renderAbsences(); return; }
+  if(!confirm('تأكيد إرسال إفادة: «لا يوجد غياب في القسم لهذا الأسبوع»؟')) return;
+  const btn = document.getElementById('noAbsenceBtn');
+  if(btn){ btn.disabled = true; btn.textContent = 'جارٍ الإرسال...'; }
+  const { error } = await sb.from('no_absence_declarations').insert({
+    department_id: String(u.department_id),
+    week_start: ws,
+    declared_by: String(u.id || ''),
+    declared_by_name: u.full_name || ''
+  });
+  if(error){
+    if(error.code === '23505'){ alert('سبق إرسال إفادة «لا يوجد غياب» لهذا الأسبوع.'); }
+    else { alert('تعذر إرسال الإفادة، حاول مرة أخرى.'); }
+    await loadAll();
+    return;
+  }
+  await loadAll();
+  alert('تم إرسال الإفادة بنجاح: لا يوجد غياب في القسم لهذا الأسبوع.');
+}
+
+function renderNoAbsencePanel(){
+  const panel = document.getElementById('noAbsPanel');
+  if(!panel) return;
+  if(!state.currentUser || state.currentUser.role === 'department'){
+    panel.classList.add('hidden'); panel.innerHTML = ''; return;
+  }
+  panel.classList.remove('hidden');
+  const cur = currentWeekStartISO();
+  const weeks = [];
+  for(let i=0;i<8;i++) weeks.push(addDaysISO(cur, -7*i));
+  const sel = (state.noAbsWeek && weeks.includes(state.noAbsWeek)) ? state.noAbsWeek : cur;
+  const rows = state.departments.map(d => ({ d, ...getNoAbsenceStatus(d.id, sel) }));
+  const nDecl = rows.filter(r => r.declared && r.absCount === 0).length;
+  const nAbs = rows.filter(r => r.absCount > 0).length;
+  const nWait = rows.length - nDecl - nAbs;
+  const fmtTime = iso => { try { return new Date(iso).toLocaleString('ar-SA',{timeZone:'Asia/Riyadh',weekday:'long',hour:'numeric',minute:'2-digit'}); } catch(e){ return ''; } };
+  panel.innerHTML = `
+    <div class="panel-head">
+      <h2>📋 متابعة الأقسام — الغياب الأسبوعي</h2>
+      <select id="noAbsWeekSel">
+        ${weeks.map(w => `<option value="${w}" ${w === sel ? 'selected' : ''}>الأسبوع: ${w} ← ${addDaysISO(w,4)}${w === cur ? ' (الحالي)' : ''}</option>`).join('')}
+      </select>
+    </div>
+    <p class="noabs-summary">رفعوا غيابًا: ${nAbs} · أفادوا بعدم وجود غياب: ${nDecl} · لم يتفاعلوا بعد: ${nWait}</p>
+    <div class="noabs-grid">
+      ${rows.map(r => `
+        <div class="noabs-card">
+          <b>${escapeHtml(r.d.name)}</b>
+          ${r.absCount > 0
+            ? `<span class="noabs-st st-abs">📆 رفع ${r.absCount} غياب</span>`
+            : (r.declared
+                ? `<span class="noabs-st st-none">✅ أفاد: لا يوجد غياب</span><span class="noabs-time">${escapeHtml(fmtTime(r.declared.created_at))}${r.declared.declared_by_name ? ' · ' + escapeHtml(r.declared.declared_by_name) : ''}</span>`
+                : `<span class="noabs-st st-wait">⏳ لم يتفاعل بعد</span>`)}
+        </div>`).join('')}
+    </div>
+  `;
+  const selEl = document.getElementById('noAbsWeekSel');
+  if(selEl) selEl.onchange = e => { state.noAbsWeek = e.target.value; renderNoAbsencePanel(); };
+}
+
 function renderAbsences(){
   const panel = document.getElementById('absencesPanel');
   const role = state.currentUser.role;
@@ -1856,6 +1978,21 @@ function renderAbsences(){
     </div>
   `;
 
+  let noAbsHtml = '';
+  if(role === 'department'){
+    const ws = currentWeekStartISO();
+    const st = getNoAbsenceStatus(state.currentUser.department_id, ws);
+    if(st.declared && st.absCount === 0){
+      noAbsHtml = `<span class="noabs-done">✅ أُرسلت إفادة «لا يوجد غياب» لهذا الأسبوع</span>`;
+    } else if(st.absCount > 0){
+      noAbsHtml = `<button class="btn-noabs" id="noAbsenceBtn" disabled>✅ لا يوجد غياب</button><span class="noabs-hint">لديكم غياب مرفوع هذا الأسبوع</span>`;
+    } else if(!isNoAbsenceWindowOpen()){
+      noAbsHtml = `<button class="btn-noabs" id="noAbsenceBtn" disabled>✅ لا يوجد غياب</button><span class="noabs-hint">متاح من الخميس 12 ظهرًا حتى السبت</span>`;
+    } else {
+      noAbsHtml = `<button class="btn-noabs" id="noAbsenceBtn">✅ لا يوجد غياب</button>`;
+    }
+  }
+
   const useAccordion = role !== 'department';
   const bodyHtml = list.length === 0
     ? `<div class="empty-note">لا توجد غيابات مسجّلة بعد.</div>`
@@ -1866,12 +2003,17 @@ function renderAbsences(){
   panel.innerHTML = `
     <div class="panel-head">
       <h2>📆 تقرير القسم الأسبوعي</h2>
-      <button class="btn-primary" id="addAbsenceBtn">+ رفع التقرير</button>
+      <div class="head-actions">
+        ${noAbsHtml}
+        <button class="btn-primary" id="addAbsenceBtn">+ رفع التقرير</button>
+      </div>
     </div>
     ${bodyHtml}
   `;
 
   document.getElementById('addAbsenceBtn').onclick = ()=> openAddAbsenceModal();
+  const noAbsBtn = document.getElementById('noAbsenceBtn');
+  if(noAbsBtn && !noAbsBtn.disabled) noAbsBtn.onclick = submitNoAbsence;
 
   if(useAccordion) wireDeptAccordionToggles(panel, 'absence', renderAbsences);
 
@@ -2972,6 +3114,12 @@ function openAddAbsenceModal(editItem){
       }
 
       await sb.from('faculty_absences').insert(entries);
+      // رفع غياب يلغي إفادة "لا يوجد غياب" للأسبوع نفسه (لا يؤثر على الحفظ لو فشل)
+      try{
+        const weeks = [...new Set(entries.filter(x=>x.absence_date).map(x=>weekStartOfISO(String(x.absence_date).slice(0,10))))];
+        const depts = [...new Set(entries.map(x=>String(x.department_id)))];
+        for(const dId of depts){ for(const w of weeks){ await sb.from('no_absence_declarations').delete().eq('department_id', dId).eq('week_start', w); } }
+      }catch(e){}
       closeModal();
       await loadAll();
     };
@@ -3703,6 +3851,8 @@ function generatePeriodReport(start, end, deptId){
   const deptCountList = Object.entries(deptCounts).sort((a,b)=>b[1]-a[1]);
   const maxDeptCount = deptCountList.length ? deptCountList[0][1] : 1;
 
+  const noAbsRows = (state.noAbsence || []).filter(r => r.week_start && addDaysISO(r.week_start,4) >= start && r.week_start <= end && (!deptId || String(r.department_id) === String(deptId))).sort((a,b)=> b.week_start.localeCompare(a.week_start));
+
   const tasksByDept = {};
   completedTasks.forEach(t=>{
     const key = deptName(t.department_id);
@@ -4019,6 +4169,22 @@ function generatePeriodReport(start, end, deptId){
       })()
     )}
   </section>
+
+  ${noAbsRows.length === 0 ? '' : `
+  <section>
+    <h2>إفادات «لا يوجد غياب» (${noAbsRows.length})</h2>
+    <table class="reports-tbl dept-tbl">
+      <thead><tr>${deptId ? '' : '<th>القسم</th>'}<th>الأسبوع</th><th>وقت الإفادة</th></tr></thead>
+      <tbody>
+        ${noAbsRows.map(r=>`
+          <tr>
+            ${deptId ? '' : `<td>${escapeHtml(deptName(r.department_id))}</td>`}
+            <td>${r.week_start} ← ${addDaysISO(r.week_start,4)}</td>
+            <td>${fmtDate(r.created_at)}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>
+  </section>`}
 
   ${!showExtras ? '' : `
   <section>
