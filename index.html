@@ -409,7 +409,11 @@
   /* ===== الرسم البياني لإنجاز الأقسام ===== */
   .dept-chart-panel{margin-bottom:22px;}
   .noabs-panel{margin-bottom:22px;}
-  .head-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px;}
+  .head-actions{display:flex;flex-direction:column;align-items:stretch;gap:10px;}
+  .noabs-box{border:1.5px dashed var(--teal);border-radius:10px;padding:10px 12px;background:#F2FAF9;display:flex;flex-direction:column;gap:7px;min-width:210px;}
+  .noabs-box-title{font-size:13.5px;font-weight:800;color:var(--seal-dark);}
+  .noabs-label{font-size:12.5px;font-weight:700;color:var(--ink-soft);}
+  .noabs-box input[type=date]{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-family:inherit;font-size:14px;background:#fff;}
   .btn-noabs{background:#fff;color:var(--teal);border:2px solid var(--teal);border-radius:8px;padding:9px 16px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;}
   .btn-noabs:hover:not(:disabled){background:var(--teal);color:#fff;}
   .btn-noabs:disabled{opacity:.5;cursor:not-allowed;}
@@ -1883,15 +1887,26 @@ async function submitNoAbsence(){
   const st = getNoAbsenceStatus(u.department_id, ws);
   if(st.declared){ alert('سبق إرسال إفادة «لا يوجد غياب» لهذا الأسبوع.'); renderAbsences(); return; }
   if(st.absCount > 0){ alert('لديكم غياب مرفوع هذا الأسبوع، فلا يمكن إرسال إفادة بعدم وجود غياب.'); renderAbsences(); return; }
-  if(!confirm('تأكيد إرسال إفادة: «لا يوجد غياب في القسم لهذا الأسبوع»؟')) return;
+  const dateEl = document.getElementById('noAbsDate');
+  const dVal = dateEl ? dateEl.value : '';
+  if(!dVal){ alert('يجب تحديد التاريخ أولًا.'); if(dateEl) dateEl.focus(); return; }
+  if(dVal < ws || dVal > addDaysISO(ws,6)){ alert('التاريخ يجب أن يكون ضمن الأسبوع الحالي.'); if(dateEl) dateEl.focus(); return; }
+  if(!confirm('تأكيد إرسال إفادة: «لا يوجد غياب في القسم» بتاريخ ' + dVal + '؟')) return;
   const btn = document.getElementById('noAbsenceBtn');
   if(btn){ btn.disabled = true; btn.textContent = 'جارٍ الإرسال...'; }
-  const { error } = await sb.from('no_absence_declarations').insert({
+  const payload = {
     department_id: String(u.department_id),
     week_start: ws,
+    declared_date: dVal,
     declared_by: String(u.id || ''),
     declared_by_name: u.full_name || ''
-  });
+  };
+  let { error } = await sb.from('no_absence_declarations').insert(payload);
+  if(error && error.code !== '23505' && /declared_date/.test(String(error.message || ''))){
+    // عمود التاريخ لم يُنشأ بعد في Supabase: نحفظ الإفادة بدونه
+    delete payload.declared_date;
+    ({ error } = await sb.from('no_absence_declarations').insert(payload));
+  }
   if(error){
     if(error.code === '23505'){ alert('سبق إرسال إفادة «لا يوجد غياب» لهذا الأسبوع.'); }
     else { alert('تعذر إرسال الإفادة، حاول مرة أخرى.'); }
@@ -1902,10 +1917,11 @@ async function submitNoAbsence(){
   alert('تم إرسال الإفادة بنجاح: لا يوجد غياب في القسم لهذا الأسبوع.');
 }
 
+const SHOW_NOABS_ADMIN_PANEL = false; // لوحة متابعة الأقسام للإدارة مخفية بطلب المستخدم؛ غيّرها إلى true لإظهارها
 function renderNoAbsencePanel(){
   const panel = document.getElementById('noAbsPanel');
   if(!panel) return;
-  if(!state.currentUser || state.currentUser.role === 'department'){
+  if(!SHOW_NOABS_ADMIN_PANEL || !state.currentUser || state.currentUser.role === 'department'){
     panel.classList.add('hidden'); panel.innerHTML = ''; return;
   }
   panel.classList.remove('hidden');
@@ -1982,14 +1998,20 @@ function renderAbsences(){
   if(role === 'department'){
     const ws = currentWeekStartISO();
     const st = getNoAbsenceStatus(state.currentUser.department_id, ws);
+    const head = `<div class="noabs-box-title">📭 إفادة: لا يوجد غياب</div>`;
     if(st.declared && st.absCount === 0){
-      noAbsHtml = `<span class="noabs-done">✅ أُرسلت إفادة «لا يوجد غياب» لهذا الأسبوع</span>`;
+      const dd = st.declared.declared_date || st.declared.week_start;
+      noAbsHtml = `<div class="noabs-box">${head}<span class="noabs-done">✅ أُرسلت الإفادة بتاريخ ${escapeHtml(dd)}</span></div>`;
     } else if(st.absCount > 0){
-      noAbsHtml = `<button class="btn-noabs" id="noAbsenceBtn" disabled>✅ لا يوجد غياب</button><span class="noabs-hint">لديكم غياب مرفوع هذا الأسبوع</span>`;
+      noAbsHtml = `<div class="noabs-box">${head}<span class="noabs-hint">لديكم غياب مرفوع هذا الأسبوع، فلا حاجة للإفادة.</span></div>`;
     } else if(!isNoAbsenceWindowOpen()){
-      noAbsHtml = `<button class="btn-noabs" id="noAbsenceBtn" disabled>✅ لا يوجد غياب</button><span class="noabs-hint">متاح من الخميس 12 ظهرًا حتى السبت</span>`;
+      noAbsHtml = `<div class="noabs-box">${head}<span class="noabs-hint">متاحة من الخميس 12 ظهرًا حتى السبت.</span></div>`;
     } else {
-      noAbsHtml = `<button class="btn-noabs" id="noAbsenceBtn">✅ لا يوجد غياب</button>`;
+      noAbsHtml = `<div class="noabs-box">${head}
+        <label class="noabs-label" for="noAbsDate">التاريخ (إجباري)</label>
+        <input type="date" id="noAbsDate" required min="${ws}" max="${addDaysISO(ws,6)}">
+        <button class="btn-noabs" id="noAbsenceBtn">✅ إرسال الإفادة</button>
+      </div>`;
     }
   }
 
@@ -2004,8 +2026,8 @@ function renderAbsences(){
     <div class="panel-head">
       <h2>📆 تقرير القسم الأسبوعي</h2>
       <div class="head-actions">
-        ${noAbsHtml}
         <button class="btn-primary" id="addAbsenceBtn">+ رفع التقرير</button>
+        ${noAbsHtml}
       </div>
     </div>
     ${bodyHtml}
@@ -4174,13 +4196,13 @@ function generatePeriodReport(start, end, deptId){
   <section>
     <h2>إفادات «لا يوجد غياب» (${noAbsRows.length})</h2>
     <table class="reports-tbl dept-tbl">
-      <thead><tr>${deptId ? '' : '<th>القسم</th>'}<th>الأسبوع</th><th>وقت الإفادة</th></tr></thead>
+      <thead><tr>${deptId ? '' : '<th>القسم</th>'}<th>الأسبوع</th><th>تاريخ الإفادة</th></tr></thead>
       <tbody>
         ${noAbsRows.map(r=>`
           <tr>
             ${deptId ? '' : `<td>${escapeHtml(deptName(r.department_id))}</td>`}
             <td>${r.week_start} ← ${addDaysISO(r.week_start,4)}</td>
-            <td>${fmtDate(r.created_at)}</td>
+            <td>${r.declared_date ? dualDateLabel(r.declared_date) : fmtDate(r.created_at)}</td>
           </tr>`).join('')}
       </tbody>
     </table>
