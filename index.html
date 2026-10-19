@@ -417,6 +417,12 @@
   .btn-noabs{background:#fff;color:var(--teal);border:2px solid var(--teal);border-radius:8px;padding:9px 16px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;}
   .btn-noabs:hover:not(:disabled){background:var(--teal);color:#fff;}
   .btn-noabs:disabled{opacity:.5;cursor:not-allowed;}
+  .noabs-chip{background:#DEF3F1;color:#0B5F57;border:1px solid #BFE6E1;border-radius:8px;padding:6px 10px;font-size:12.5px;font-weight:700;}
+  .noabs-warn{background:#FBEBD0;color:#8A5A12;border:1px solid #F0D5A3;border-radius:8px;padding:6px 10px;font-size:12.5px;font-weight:700;}
+  .nab-note{font-size:13.5px;color:var(--ink-soft);margin:0 0 12px;}
+  .nab-error{background:#F7DCD8;color:#9C2A20;border-radius:8px;padding:9px 12px;font-size:13.5px;font-weight:700;margin-top:10px;}
+  .nab-found{background:#FBEBD0;color:#6F4710;border:1px solid #F0D5A3;border-radius:8px;padding:10px 12px;font-size:13.5px;margin-top:10px;}
+  .nab-found-row{margin-top:7px;font-weight:600;}
   .noabs-hint{font-size:12.5px;color:var(--ink-soft);font-weight:600;}
   .noabs-done{display:inline-block;background:#DEF3F1;color:#0B5F57;border:1px solid #BFE6E1;border-radius:8px;padding:8px 14px;font-size:13.5px;font-weight:700;}
   .noabs-summary{font-size:13.5px;color:var(--ink-soft);margin:0;padding:12px 20px 4px;font-weight:600;}
@@ -1869,52 +1875,94 @@ function isNoAbsenceWindowOpen(now){
   return (r.dow === 4 && r.hour >= 12) || r.dow === 5 || r.dow === 6;
 }
 function getNoAbsenceStatus(deptId, weekStart){
-  const declared = (state.noAbsence || []).find(r => String(r.department_id) === String(deptId) && r.week_start === weekStart) || null;
+  const declared = (state.noAbsence || []).find(r => !r.cancelled_at && String(r.department_id) === String(deptId) && r.week_start === weekStart) || null;
   const weekEnd = addDaysISO(weekStart, 6);
   const absCount = state.absences.filter(a => String(a.department_id) === String(deptId) && a.absence_date && a.absence_date.slice(0,10) >= weekStart && a.absence_date.slice(0,10) <= weekEnd).length;
   return { declared, absCount };
 }
 
-async function submitNoAbsence(){
+async function cancelNoAbsenceForDates(deptId, dates){
+  const uniq = [...new Set((dates || []).filter(Boolean).map(d => String(d).slice(0,10)))];
+  const cancelled = [];
+  for(const d of uniq){
+    try{
+      const { data } = await sb.from('no_absence_declarations')
+        .update({ cancelled_at: new Date().toISOString(), cancel_note: 'رُفع غياب بتاريخ الإفادة' })
+        .eq('department_id', String(deptId)).eq('declared_date', d).is('cancelled_at', null).select('id');
+      if(data && data.length) cancelled.push(d);
+    }catch(e){}
+  }
+  return cancelled;
+}
+
+function openNoAbsenceModal(){
   const u = state.currentUser;
   if(!u || u.role !== 'department') return;
-  if(!isNoAbsenceWindowOpen()){
-    alert('هذه الخاصية متاحة من الخميس الساعة 12 ظهرًا حتى نهاية يوم السبت.');
-    renderAbsences();
-    return;
-  }
   const ws = currentWeekStartISO();
-  const st = getNoAbsenceStatus(u.department_id, ws);
-  if(st.declared){ alert('سبق إرسال إفادة «لا يوجد غياب» لهذا الأسبوع.'); renderAbsences(); return; }
-  if(st.absCount > 0){ alert('لديكم غياب مرفوع هذا الأسبوع، فلا يمكن إرسال إفادة بعدم وجود غياب.'); renderAbsences(); return; }
-  const dateEl = document.getElementById('noAbsDate');
-  const dVal = dateEl ? dateEl.value : '';
-  if(!dVal){ alert('يجب تحديد التاريخ أولًا.'); if(dateEl) dateEl.focus(); return; }
-  if(dVal < ws || dVal > addDaysISO(ws,6)){ alert('التاريخ يجب أن يكون ضمن الأسبوع الحالي.'); if(dateEl) dateEl.focus(); return; }
-  if(!confirm('تأكيد إرسال إفادة: «لا يوجد غياب في القسم» بتاريخ ' + dVal + '؟')) return;
-  const btn = document.getElementById('noAbsenceBtn');
-  if(btn){ btn.disabled = true; btn.textContent = 'جارٍ الإرسال...'; }
-  const payload = {
-    department_id: String(u.department_id),
-    week_start: ws,
-    declared_date: dVal,
-    declared_by: String(u.id || ''),
-    declared_by_name: u.full_name || ''
-  };
-  let { error } = await sb.from('no_absence_declarations').insert(payload);
-  if(error && error.code !== '23505' && /declared_date/.test(String(error.message || ''))){
-    // عمود التاريخ لم يُنشأ بعد في Supabase: نحفظ الإفادة بدونه
-    delete payload.declared_date;
-    ({ error } = await sb.from('no_absence_declarations').insert(payload));
-  }
-  if(error){
-    if(error.code === '23505'){ alert('سبق إرسال إفادة «لا يوجد غياب» لهذا الأسبوع.'); }
-    else { alert('تعذر إرسال الإفادة، حاول مرة أخرى.'); }
+  const today = riyadhParts().iso;
+  const thu = addDaysISO(ws, 4);
+  const maxDate = today < thu ? today : thu;
+  const overlay = document.getElementById('modalOverlay');
+  overlay.classList.remove('hidden');
+  overlay.innerHTML = `
+    <div class="modal">
+      <h3>📭 إفادة: لا يوجد غياب</h3>
+      <p class="nab-note">حدّد التاريخ الذي لا يوجد فيه غياب في القسم (من الأحد إلى الخميس، ولا يمكن اختيار تاريخ لم يحن بعد).</p>
+      <div class="field"><label>التاريخ (إجباري)</label><input type="date" id="nabDate" required min="${ws}" max="${maxDate}"></div>
+      <div id="nabResult"></div>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="nabCancel">إغلاق</button>
+        <button class="btn-primary" id="nabGo">تسجيل الإفادة</button>
+      </div>
+    </div>`;
+  document.getElementById('nabCancel').onclick = closeModal;
+  const res = document.getElementById('nabResult');
+  const goBtn = document.getElementById('nabGo');
+  const dateEl = document.getElementById('nabDate');
+  dateEl.onchange = ()=>{ res.innerHTML = ''; goBtn.disabled = false; };
+  goBtn.onclick = async ()=>{
+    const val = dateEl.value;
+    if(!val){ res.innerHTML = '<div class="nab-error">يجب تحديد التاريخ أولًا.</div>'; dateEl.focus(); return; }
+    const dow = new Date(val + 'T00:00:00Z').getUTCDay();
+    if(val < ws || val > maxDate || dow > 4){
+      res.innerHTML = '<div class="nab-error">اختر تاريخًا من الأحد إلى الخميس ضمن الأسبوع الحالي، وليس تاريخًا لم يحن بعد.</div>';
+      return;
+    }
+    goBtn.disabled = true; goBtn.textContent = 'جارٍ التحقق...';
+    // 1) هل يوجد غياب مرفوع بهذا التاريخ؟
+    let found = [];
+    const { data: rows, error: qErr } = await sb.from('faculty_absences')
+      .select('faculty_name,course_name,absence_date,absence_time')
+      .eq('department_id', u.department_id)
+      .gte('absence_date', val).lt('absence_date', addDaysISO(val, 1));
+    if(qErr){
+      found = state.absences.filter(a => String(a.department_id) === String(u.department_id) && a.absence_date && String(a.absence_date).slice(0,10) === val);
+    } else { found = rows || []; }
+    if(found.length){
+      res.innerHTML = `<div class="nab-found"><b>⚠️ يوجد غياب مرفوع بتاريخ ${escapeHtml(val)}، فلا يمكن تسجيل الإفادة:</b>
+        ${found.map(a => `<div class="nab-found-row">👤 ${escapeHtml(a.faculty_name || '—')} · 📘 ${escapeHtml(a.course_name || '—')} · 📅 ${escapeHtml(String(a.absence_date).slice(0,10))}${a.absence_time ? ' · ⏰ ' + escapeHtml(a.absence_time) : ''}</div>`).join('')}</div>`;
+      goBtn.textContent = 'تسجيل الإفادة'; goBtn.disabled = true;
+      return;
+    }
+    // 2) تسجيل الإفادة
+    const payload = {
+      department_id: String(u.department_id),
+      week_start: ws,
+      declared_date: val,
+      declared_by: String(u.id || ''),
+      declared_by_name: u.full_name || ''
+    };
+    const { error } = await sb.from('no_absence_declarations').insert(payload);
+    if(error){
+      goBtn.textContent = 'تسجيل الإفادة'; goBtn.disabled = false;
+      if(error.code === '23505'){ res.innerHTML = '<div class="nab-error">سبق تسجيل إفادة «لا يوجد غياب» بهذا التاريخ.</div>'; }
+      else { res.innerHTML = '<div class="nab-error">تعذر تسجيل الإفادة، حاول مرة أخرى.</div>'; }
+      return;
+    }
+    closeModal();
     await loadAll();
-    return;
-  }
-  await loadAll();
-  alert('تم إرسال الإفادة بنجاح: لا يوجد غياب في القسم لهذا الأسبوع.');
+    alert('تم تسجيل الإفادة بنجاح: لا يوجد غياب في القسم بتاريخ ' + val + '.');
+  };
 }
 
 const SHOW_NOABS_ADMIN_PANEL = false; // لوحة متابعة الأقسام للإدارة مخفية بطلب المستخدم؛ غيّرها إلى true لإظهارها
@@ -1997,22 +2045,16 @@ function renderAbsences(){
   let noAbsHtml = '';
   if(role === 'department'){
     const ws = currentWeekStartISO();
-    const st = getNoAbsenceStatus(state.currentUser.department_id, ws);
-    const head = `<div class="noabs-box-title">📭 إفادة: لا يوجد غياب</div>`;
-    if(st.declared && st.absCount === 0){
-      const dd = st.declared.declared_date || st.declared.week_start;
-      noAbsHtml = `<div class="noabs-box">${head}<span class="noabs-done">✅ أُرسلت الإفادة بتاريخ ${escapeHtml(dd)}</span></div>`;
-    } else if(st.absCount > 0){
-      noAbsHtml = `<div class="noabs-box">${head}<span class="noabs-hint">لديكم غياب مرفوع هذا الأسبوع، فلا حاجة للإفادة.</span></div>`;
-    } else if(!isNoAbsenceWindowOpen()){
-      noAbsHtml = `<div class="noabs-box">${head}<span class="noabs-hint">متاحة من الخميس 12 ظهرًا حتى السبت.</span></div>`;
-    } else {
-      noAbsHtml = `<div class="noabs-box">${head}
-        <label class="noabs-label" for="noAbsDate">التاريخ (إجباري)</label>
-        <input type="date" id="noAbsDate" required min="${ws}" max="${addDaysISO(ws,6)}">
-        <button class="btn-noabs" id="noAbsenceBtn">✅ إرسال الإفادة</button>
-      </div>`;
-    }
+    const mine = (state.noAbsence || []).filter(r => String(r.department_id) === String(state.currentUser.department_id) && r.week_start === ws)
+      .sort((x,y)=> String(x.declared_date || '').localeCompare(String(y.declared_date || '')));
+    const rowsHtml = mine.map(r => r.cancelled_at
+      ? `<div class="noabs-warn">⚠️ أُلغيت إفادة ${escapeHtml(r.declared_date || r.week_start)} لأنه رُفع غياب بتاريخها.</div>`
+      : `<div class="noabs-chip">✅ إفادة بتاريخ ${escapeHtml(r.declared_date || r.week_start)}</div>`).join('');
+    noAbsHtml = `<div class="noabs-box">
+      <div class="noabs-box-title">📭 إفادة: لا يوجد غياب</div>
+      <button class="btn-noabs" id="noAbsenceBtn">✅ إفادة بعدم وجود غياب</button>
+      ${rowsHtml}
+    </div>`;
   }
 
   const useAccordion = role !== 'department';
@@ -2035,7 +2077,7 @@ function renderAbsences(){
 
   document.getElementById('addAbsenceBtn').onclick = ()=> openAddAbsenceModal();
   const noAbsBtn = document.getElementById('noAbsenceBtn');
-  if(noAbsBtn && !noAbsBtn.disabled) noAbsBtn.onclick = submitNoAbsence;
+  if(noAbsBtn) noAbsBtn.onclick = openNoAbsenceModal;
 
   if(useAccordion) wireDeptAccordionToggles(panel, 'absence', renderAbsences);
 
@@ -3130,20 +3172,27 @@ function openAddAbsenceModal(editItem){
         if(editItem.document_path && e.document_path !== editItem.document_path){
           sb.storage.from('absence-documents').remove([editItem.document_path]).catch(()=>{});
         }
+        try{ await cancelNoAbsenceForDates(e.department_id || editItem.department_id, [e.absence_date]); }catch(_){}
         closeModal();
         await loadAll();
         return;
       }
 
       await sb.from('faculty_absences').insert(entries);
-      // رفع غياب يلغي إفادة "لا يوجد غياب" للأسبوع نفسه (لا يؤثر على الحفظ لو فشل)
+      // رفع غياب بتاريخ فيه إفادة "لا يوجد غياب" يلغي الإفادة تلقائيًا
+      const cancelledNotes = [];
       try{
-        const weeks = [...new Set(entries.filter(x=>x.absence_date).map(x=>weekStartOfISO(String(x.absence_date).slice(0,10))))];
         const depts = [...new Set(entries.map(x=>String(x.department_id)))];
-        for(const dId of depts){ for(const w of weeks){ await sb.from('no_absence_declarations').delete().eq('department_id', dId).eq('week_start', w); } }
+        for(const dId of depts){
+          const c = await cancelNoAbsenceForDates(dId, entries.filter(x=>String(x.department_id)===dId).map(x=>x.absence_date));
+          c.forEach(d => cancelledNotes.push(d));
+        }
       }catch(e){}
       closeModal();
       await loadAll();
+      if(cancelledNotes.length && state.currentUser.role === 'department'){
+        alert('تنبيه: أُلغيت إفادة «لا يوجد غياب» بتاريخ ' + cancelledNotes.join('، ') + ' تلقائيًا لأنه رُفع غياب بتاريخها.');
+      }
     };
   }
 }
@@ -3873,7 +3922,7 @@ function generatePeriodReport(start, end, deptId){
   const deptCountList = Object.entries(deptCounts).sort((a,b)=>b[1]-a[1]);
   const maxDeptCount = deptCountList.length ? deptCountList[0][1] : 1;
 
-  const noAbsRows = (state.noAbsence || []).filter(r => r.week_start && addDaysISO(r.week_start,4) >= start && r.week_start <= end && (!deptId || String(r.department_id) === String(deptId))).sort((a,b)=> b.week_start.localeCompare(a.week_start));
+  const noAbsRows = (state.noAbsence || []).filter(r => !r.cancelled_at && r.week_start && addDaysISO(r.week_start,4) >= start && r.week_start <= end && (!deptId || String(r.department_id) === String(deptId))).sort((a,b)=> b.week_start.localeCompare(a.week_start));
 
   const tasksByDept = {};
   completedTasks.forEach(t=>{
@@ -4196,13 +4245,13 @@ function generatePeriodReport(start, end, deptId){
   <section>
     <h2>إفادات «لا يوجد غياب» (${noAbsRows.length})</h2>
     <table class="reports-tbl dept-tbl">
-      <thead><tr>${deptId ? '' : '<th>القسم</th>'}<th>الأسبوع</th><th>تاريخ الإفادة</th></tr></thead>
+      <thead><tr>${deptId ? '' : '<th>القسم</th>'}<th>تاريخ الإفادة</th><th>وقت التسجيل</th></tr></thead>
       <tbody>
         ${noAbsRows.map(r=>`
           <tr>
             ${deptId ? '' : `<td>${escapeHtml(deptName(r.department_id))}</td>`}
-            <td>${r.week_start} ← ${addDaysISO(r.week_start,4)}</td>
-            <td>${r.declared_date ? dualDateLabel(r.declared_date) : fmtDate(r.created_at)}</td>
+            <td>${r.declared_date ? dualDateLabel(r.declared_date) : (r.week_start + ' ← ' + addDaysISO(r.week_start,4))}</td>
+            <td>${fmtDate(r.created_at)}</td>
           </tr>`).join('')}
       </tbody>
     </table>
