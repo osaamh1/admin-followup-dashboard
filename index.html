@@ -433,14 +433,28 @@
   .com-ok{color:var(--green);font-size:12px;} .com-no{color:var(--redd);font-size:12px;font-weight:700;}
   .com-empty{color:var(--ink-soft);font-size:13px;margin:6px 0;} .com-warn{color:#8A5A12;font-size:12.5px;margin:6px 0 0;}
   .com-add{margin-top:12px;}
-  .com-mrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;border:1px solid var(--line);border-radius:6px;padding:7px 10px;margin-bottom:6px;background:var(--paper);}
+  .com-mrow{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin-bottom:10px;background:#fff;}
   .com-mname{flex:1;min-width:150px;font-weight:600;font-size:13.5px;} .com-mname small{font-weight:400;color:var(--ink-soft);}
   .com-mrow select{padding:5px 8px;font-size:13px;} .com-conf{font-size:12.5px;display:flex;align-items:center;gap:4px;cursor:pointer;}
   .com-del{background:none;border:none;color:var(--redd);font-size:15px;cursor:pointer;}
-  .com-grp-opts{display:flex;gap:8px;flex-wrap:wrap;}
+  .com-grp-opts{display:flex;gap:12px;flex-wrap:wrap;}
   .com-grp-opt{flex:1 1 130px;border:1.5px solid var(--line);border-radius:8px;padding:9px 10px;cursor:pointer;display:flex;flex-direction:column;gap:2px;background:var(--paper-raised);font-size:12.5px;color:var(--ink-soft);}
   .com-grp-opt input{position:absolute;opacity:0;pointer-events:none;} .com-grp-opt b{color:var(--seal-dark);font-size:14px;}
   .com-grp-opt.is-on{border-color:var(--teal);background:var(--teal-tint);}
+  .com-form{max-width:780px;padding:28px 30px;}
+  .com-lead{color:var(--ink-soft);font-size:14px;margin:-4px 0 20px;}
+  .com-step{background:var(--paper-raised);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin-bottom:18px;}
+  .com-step-title{font-weight:700;color:var(--seal-dark);font-size:15.5px;margin-bottom:12px;display:flex;align-items:center;gap:10px;}
+  .com-step-title span{background:var(--seal);color:#fff;width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:13px;}
+  .com-step-title em{font-style:normal;color:var(--ink-soft);font-weight:500;font-size:13px;}
+  .com-input{width:100%;border:1px solid var(--line);border-radius:6px;padding:12px 14px;font-size:15px;color:var(--ink);background:#fff;}
+  .com-input:focus{outline:2px solid var(--teal);border-color:var(--teal);}
+  .com-hint{color:var(--ink-soft);font-size:13px;margin:8px 0 0;line-height:1.7;}
+  .com-addbox{background:#fff;border:1px dashed var(--line);border-radius:8px;padding:12px;margin:12px 0 14px;display:flex;flex-direction:column;gap:10px;}
+  .com-mctl{display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
+  .com-mctl select{width:auto;min-width:150px;padding:9px 12px;}
+  .com-add{margin:6px 0 4px;font-size:15px;padding:11px 20px;}
+  .com-grp-opt{padding:14px 14px !important;}
   .com-addrow{display:flex;gap:8px;margin-top:8px;} .com-addrow select,.com-addrow input{flex:1;min-width:0;}
   .noabs-panel{margin-bottom:22px;}
   .head-actions{display:flex;flex-direction:column;align-items:stretch;gap:10px;}
@@ -973,6 +987,12 @@ function flagOverdueLocally(){
 // ============================================
 // حصر اللجان وأعضاء هيئة التدريس (تعميم العميد)
 // ============================================
+// إظهار خاصية حصر اللجان للجميع (اجعلها true عند اعتماد التعميم وإرساله للأقسام)
+const SHOW_COMMITTEES = false;
+function comEnabled(){
+  try { if(new URLSearchParams(location.search).get('committees') === '1') return true; } catch(e){}
+  return SHOW_COMMITTEES;
+}
 const COM_GROUPS = [
   { k:'أ', short:'رئيسية (أ)', label:'المجموعة (أ): اللجان الرئيسية' },
   { k:'ب', short:'فرعية (ب)', label:'المجموعة (ب): اللجان الفرعية' },
@@ -991,8 +1011,8 @@ function comDeptInfo(circ, deptId){
   const sub = comSubmission(circ.id, deptId);
   const today = riyadhParts().iso;
   const memCount = coms.reduce((n, c) => n + comMembersOf(c.id).length, 0);
-  const status = sub ? 'sent' : (coms.length ? 'draft' : 'none');
-  const late = !sub && today > circ.deadline;
+  const status = sub ? (sub.status === 'modified' ? 'modified' : 'sent') : (coms.length ? 'draft' : 'none');
+  const late = status !== 'sent' && today > circ.deadline;
   return { coms, sub, status, late, memCount };
 }
 function comDaysLeft(circ){
@@ -1008,7 +1028,8 @@ function comFmtTime(iso){
 }
 function comStatusChip(info){
   if(info.status === 'sent') return '<span class="com-chip c-sent">✅ أُرسلت القائمة</span>';
-  if(info.late) return '<span class="com-chip c-late">⏰ متأخر عن الموعد' + (info.status === 'draft' ? ' (قيد الإعداد)' : '') + '</span>';
+  if(info.late) return '<span class="com-chip c-late">⏰ متأخر عن الموعد' + (info.status === 'none' ? '' : ' (قيد الإعداد)') + '</span>';
+  if(info.status === 'modified') return '<span class="com-chip c-draft">🔄 عُدّلت بعد الإرسال — بانتظار إعادة الإرسال</span>';
   if(info.status === 'draft') return '<span class="com-chip c-draft">✏️ قيد الإعداد</span>';
   return '<span class="com-chip c-none">⏳ لم يبدأ</span>';
 }
@@ -1017,10 +1038,11 @@ function renderCircularPanel(){
   const panel = document.getElementById('circPanel');
   if(!panel) return;
   const circ = comCircular();
-  if(!circ || !state.currentUser){ panel.classList.add('hidden'); panel.innerHTML = ''; return; }
+  if(!comEnabled() || !circ || !state.currentUser){ panel.classList.add('hidden'); panel.innerHTML = ''; return; }
   panel.classList.remove('hidden');
   const left = comDaysLeft(circ);
   const leftTxt = left > 0 ? `المتبقي ${left} ${left === 1 ? 'يوم' : (left <= 10 ? 'أيام' : 'يومًا')}` : (left === 0 ? 'آخر يوم للإرسال اليوم' : 'انتهى الموعد');
+  const fileBtn = circ.attachment_path ? `<button class="btn-ghost" id="circFileBtn">📎 التعميم الموقّع</button>` : '';
 
   if(state.currentUser.role === 'department'){
     const deptId = state.currentUser.department_id;
@@ -1031,32 +1053,34 @@ function renderCircularPanel(){
         ${comStatusChip(info)}
       </div>
       <p class="com-meta">صدر ${escapeHtml(comFmtDate(circ.issued_date))} · آخر موعد للإرسال: <b>${escapeHtml(comFmtDate(circ.deadline))}</b> · ${leftTxt}</p>
-      <p class="com-meta">اللجان المضافة: <b>${info.coms.length}</b> · الأعضاء المسجّلون: <b>${info.memCount}</b>${info.sub ? ' · أُرسلت: ' + escapeHtml(comFmtTime(info.sub.submitted_at)) : ''}</p>
+      <p class="com-meta">اللجان المضافة: <b>${info.coms.length}</b> · الأعضاء المسجّلون: <b>${info.memCount}</b>${info.sub && info.status === 'sent' ? ' · أُرسلت: ' + escapeHtml(comFmtTime(info.sub.submitted_at)) : ''}</p>
       <div class="com-actions">
-        <button class="btn-primary" id="circManageBtn">${info.sub ? '👁️ عرض قائمة اللجان' : (info.coms.length ? '✏️ متابعة إعداد قائمة اللجان' : '➕ ابدأ حصر اللجان')}</button>
-        <button class="btn-ghost" id="circReadBtn">📄 نص التعميم</button>
+        <button class="btn-primary" id="circManageBtn">${info.status === 'sent' ? '📋 عرض القائمة / إضافة لجنة أخرى' : (info.coms.length ? '✏️ متابعة إعداد قائمة اللجان' : '➕ ابدأ حصر اللجان')}</button>
+        ${fileBtn}
       </div>`;
-    document.getElementById('circManageBtn').onclick = () => openCommitteesManager(deptId, !!info.sub);
-    document.getElementById('circReadBtn').onclick = () => openCircularText(circ);
+    document.getElementById('circManageBtn').onclick = () => openCommitteesManager(deptId, false);
+    const fb = document.getElementById('circFileBtn'); if(fb) fb.onclick = () => openCircularFile(circ);
     return;
   }
 
   const rows = state.departments.map(d => ({ d, info: comDeptInfo(circ, d.id) }));
   const nSent = rows.filter(r => r.info.status === 'sent').length;
+  const nStarted = rows.filter(r => r.info.status !== 'none').length;
   const nLate = rows.filter(r => r.info.late).length;
   panel.innerHTML = `
     <div class="panel-head">
       <h2>📨 متابعة تعميم: ${escapeHtml(circ.subject || circ.title)}</h2>
-      <span class="com-chip ${nSent === rows.length ? 'c-sent' : 'c-draft'}">أرسل ${nSent} من ${rows.length}</span>
+      <span class="com-chip ${nSent === rows.length ? 'c-sent' : 'c-draft'}">بدأ ${nStarted} · أرسل ${nSent} من ${rows.length}</span>
     </div>
     <p class="com-meta">صدر ${escapeHtml(comFmtDate(circ.issued_date))} · الموعد النهائي: <b>${escapeHtml(comFmtDate(circ.deadline))}</b> · ${leftTxt}${nLate ? ` · <span class="com-late-txt">متأخر: ${nLate}</span>` : ''}</p>
     <div class="com-actions">
       <button class="btn-primary" id="circReportBtn">📊 تقرير اللجان</button>
-      <button class="btn-ghost" id="circReadBtn">📄 نص التعميم / طباعة</button>
+      ${fileBtn}
+      <button class="btn-ghost" id="circAttachBtn">${circ.attachment_path ? '🔁 استبدال التعميم الموقّع' : '📎 إرفاق التعميم الموقّع'}</button>
       <button class="btn-ghost" id="circRemindBtn">📋 نسخ تذكير للأقسام غير المُرسلة</button>
     </div>
     <div class="com-table-wrap"><table class="com-table">
-      <thead><tr><th>القسم</th><th>الحالة</th><th>اللجان</th><th>الأعضاء</th><th>وقت الإرسال</th><th></th></tr></thead>
+      <thead><tr><th>القسم</th><th>الحالة</th><th>اللجان</th><th>الأعضاء</th><th>آخر إرسال</th><th></th></tr></thead>
       <tbody>
       ${rows.map(r => `<tr>
         <td><b>${escapeHtml(r.d.name)}</b></td>
@@ -1064,22 +1088,13 @@ function renderCircularPanel(){
         <td>${r.info.coms.length}</td>
         <td>${r.info.memCount}</td>
         <td>${r.info.sub ? escapeHtml(comFmtTime(r.info.sub.submitted_at)) : '—'}</td>
-        <td class="com-row-actions">
-          <button class="btn-text" data-view="${escapeHtml(String(r.d.id))}">عرض</button>
-          ${r.info.sub ? `<button class="btn-text com-reopen" data-reopen="${escapeHtml(String(r.d.id))}">إعادة فتح</button>` : ''}
-        </td></tr>`).join('')}
+        <td class="com-row-actions"><button class="btn-text" data-view="${escapeHtml(String(r.d.id))}">عرض</button></td></tr>`).join('')}
       </tbody></table></div>`;
   document.getElementById('circReportBtn').onclick = () => generateCommitteesReport();
-  document.getElementById('circReadBtn').onclick = () => openCircularText(circ);
+  const fb = document.getElementById('circFileBtn'); if(fb) fb.onclick = () => openCircularFile(circ);
+  document.getElementById('circAttachBtn').onclick = () => uploadCircularFile(circ);
   document.getElementById('circRemindBtn').onclick = () => copyCommitteesReminder(circ);
   panel.querySelectorAll('[data-view]').forEach(b => b.onclick = () => openCommitteesManager(b.dataset.view, true));
-  panel.querySelectorAll('[data-reopen]').forEach(b => b.onclick = async () => {
-    const dept = state.departments.find(x => String(x.id) === b.dataset.reopen);
-    if(!confirm(`إعادة فتح قائمة اللجان لقسم «${dept ? dept.name : ''}» ليتمكن من تعديلها؟`)) return;
-    const { error } = await sb.from('committee_submissions').delete().eq('circular_id', circ.id).eq('department_id', b.dataset.reopen);
-    if(error){ alert('تعذّرت إعادة الفتح، حاول مرة أخرى.'); return; }
-    await loadAll();
-  });
 }
 
 function copyCommitteesReminder(circ){
@@ -1092,43 +1107,42 @@ function copyCommitteesReminder(circ){
   } else { window.prompt('انسخ النص:', txt); }
 }
 
-function openCircularText(circ){
-  const overlay = document.getElementById('modalOverlay');
-  overlay.classList.remove('hidden');
-  overlay.innerHTML = `
-    <div class="modal modal-wide com-modal">
-      <h3>📄 ${escapeHtml(circ.title)}</h3>
-      <div class="circ-body">${escapeHtml(circ.body)}</div>
-      <div class="modal-actions">
-        <button class="btn-ghost" id="ctClose">إغلاق</button>
-        <button class="btn-ghost" id="ctCopy">📋 نسخ النص</button>
-        <button class="btn-primary" id="ctPrint">🖨️ طباعة التعميم</button>
-      </div>
-    </div>`;
-  document.getElementById('ctClose').onclick = closeModal;
-  document.getElementById('ctCopy').onclick = () => {
-    const done = () => alert('تم نسخ نص التعميم.');
-    if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(circ.body).then(done, () => window.prompt('انسخ النص:', circ.body));
-    else window.prompt('انسخ النص:', circ.body);
+function openCircularFile(circ){
+  if(!circ.attachment_path) return;
+  const { data } = sb.storage.from('circulars').getPublicUrl(circ.attachment_path);
+  if(data && data.publicUrl) window.open(data.publicUrl, '_blank');
+  else alert('تعذّر فتح الملف.');
+}
+
+function uploadCircularFile(circ){
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = '.pdf,image/*';
+  inp.onchange = async () => {
+    const f = inp.files && inp.files[0];
+    if(!f) return;
+    if(f.size > 10 * 1024 * 1024){ alert('حجم الملف أكبر من 10 ميجابايت.'); return; }
+    const ext = ((f.name.split('.').pop() || 'pdf').replace(/[^a-zA-Z0-9]/g, '').toLowerCase()) || 'pdf';
+    const path = circ.id + '/' + Date.now() + '.' + ext;
+    const btn = document.getElementById('circAttachBtn');
+    if(btn){ btn.disabled = true; btn.textContent = 'جارٍ الرفع...'; }
+    const { error: upErr } = await sb.storage.from('circulars').upload(path, f);
+    if(upErr){ alert('تعذّر رفع الملف: تأكد من تشغيل ملف SQL الخاص بالمرفقات.'); await loadAll(); return; }
+    const { error } = await sb.from('circulars').update({ attachment_path: path, attachment_name: f.name }).eq('id', circ.id);
+    if(error){ alert('رُفع الملف لكن تعذّر ربطه بالتعميم (تأكد من تشغيل ملف SQL).'); await loadAll(); return; }
+    if(circ.attachment_path) sb.storage.from('circulars').remove([circ.attachment_path]).catch(()=>{});
+    await loadAll();
+    alert('تم إرفاق التعميم الموقّع، وسيظهر زر عرضه لرؤساء الأقسام.');
   };
-  document.getElementById('ctPrint').onclick = () => {
-    const html = `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>${escapeHtml(circ.title)}</title>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@500;700;900&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
-<style>
-body{font-family:'IBM Plex Sans Arabic',sans-serif;color:#1C2321;margin:0;padding:40px;font-size:17px;line-height:2;}
-.sheet{max-width:760px;margin:0 auto;}
-.head{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #12294F;padding-bottom:14px;margin-bottom:26px;}
-.head img{height:70px;} .head h1{font-family:'Noto Kufi Arabic',sans-serif;font-size:26px;color:#12294F;margin:0;}
-.head small{display:block;color:#4A524E;font-size:13px;}
-.body{white-space:pre-wrap;}
-.bar{text-align:left;margin-bottom:16px;} .bar button{background:#12294F;color:#fff;border:0;padding:10px 20px;border-radius:6px;font-size:14px;cursor:pointer;font-family:inherit;}
-@media print{.bar{display:none;} body{padding:0;}}
-</style></head><body><div class="sheet"><div class="bar"><button onclick="window.print()">🖨 طباعة / حفظ PDF</button></div>
-<div class="head"><div><h1>${escapeHtml(circ.title)}</h1><small>كلية الشريعة — جامعة القصيم · ${escapeHtml(comFmtDate(circ.issued_date))}</small></div><img src="${LOGO_DATA_URI}" alt="شعار الكلية"></div>
-<div class="body">${escapeHtml(circ.body)}</div></div></body></html>`;
-    const w = window.open('', '_blank');
-    w.document.write(html); w.document.close();
-  };
+  inp.click();
+}
+
+async function comMarkModified(deptId){
+  const circ = comCircular();
+  if(!circ) return;
+  const sub = comSubmission(circ.id, deptId);
+  if(sub && sub.status !== 'modified'){
+    await sb.from('committee_submissions').update({ status: 'modified' }).eq('id', sub.id);
+  }
 }
 
 // ----- مدير قائمة اللجان للقسم -----
@@ -1137,7 +1151,7 @@ function openCommitteesManager(deptId, readOnly){
   if(!circ) return;
   const dept = state.departments.find(d => String(d.id) === String(deptId));
   const info = comDeptInfo(circ, deptId);
-  const locked = readOnly || !!info.sub || state.currentUser.role !== 'department';
+  const locked = readOnly || state.currentUser.role !== 'department';
   const overlay = document.getElementById('modalOverlay');
   overlay.classList.remove('hidden');
 
@@ -1157,18 +1171,19 @@ function openCommitteesManager(deptId, readOnly){
   overlay.innerHTML = `
     <div class="modal modal-wide com-modal">
       <h3>📨 حصر اللجان — ${escapeHtml(dept ? dept.name : '')}</h3>
-      <p class="com-meta">${comStatusChip(info)} ${info.sub ? ' · أُرسلت ' + escapeHtml(comFmtTime(info.sub.submitted_at)) : ' · الموعد النهائي: ' + escapeHtml(comFmtDate(circ.deadline))}</p>
+      <p class="com-meta">${comStatusChip(info)} ${info.status === 'sent' && info.sub ? ' · أُرسلت ' + escapeHtml(comFmtTime(info.sub.submitted_at)) : ' · الموعد النهائي: ' + escapeHtml(comFmtDate(circ.deadline))}</p>
+      ${locked ? '' : `<button class="btn-primary com-add" id="comAddBtn">➕ إضافة لجنة${info.coms.length ? ' أخرى' : ''}</button>
+      ${info.status === 'sent' ? '<p class="com-hint">تم إرسال قائمتك. يمكنك إضافة لجان أخرى أو تعديل ما أُضيف، ثم إعادة الإرسال.</p>' : ''}`}
       ${COM_GROUPS.map(g => {
         const list = info.coms.filter(c => c.grp === g.k);
         return `<div class="com-group"><div class="com-group-title">${g.label} <span>(${list.length})</span></div>
           ${list.length ? list.map(comCard).join('') : '<p class="com-empty">لا توجد لجان في هذه المجموعة.</p>'}
         </div>`;
       }).join('')}
-      ${locked ? '' : '<button class="btn-ghost com-add" id="comAddBtn">➕ إضافة لجنة</button>'}
       <p class="login-error hidden" id="comSubmitErr"></p>
       <div class="modal-actions">
         <button class="btn-ghost" id="comClose">إغلاق</button>
-        ${locked ? '' : '<button class="btn-primary" id="comSubmitBtn">📤 اعتماد وإرسال القائمة</button>'}
+        ${(locked || info.status === 'sent') ? '' : `<button class="btn-primary" id="comSubmitBtn">📤 ${info.sub ? 'إعادة إرسال القائمة' : 'اعتماد وإرسال القائمة'}</button>`}
       </div>
     </div>`;
   document.getElementById('comClose').onclick = closeModal;
@@ -1180,10 +1195,12 @@ function openCommitteesManager(deptId, readOnly){
     if(!c || !confirm(`حذف لجنة «${c.name}» وأعضائها؟`)) return;
     const { error } = await sb.from('committees').delete().eq('id', c.id);
     if(error){ alert('تعذّر الحذف، حاول مرة أخرى.'); return; }
+    await comMarkModified(deptId);
     await loadAll();
     openCommitteesManager(deptId, false);
   });
-  document.getElementById('comSubmitBtn').onclick = async () => {
+  const subBtn = document.getElementById('comSubmitBtn');
+  if(subBtn) subBtn.onclick = async () => {
     const errEl = document.getElementById('comSubmitErr');
     const errs = [];
     if(!info.coms.length) errs.push('أضف لجنة واحدة على الأقل.');
@@ -1201,16 +1218,19 @@ function openCommitteesManager(deptId, readOnly){
       return;
     }
     errEl.classList.add('hidden');
-    if(!confirm('بعد الاعتماد والإرسال لن تتمكن من تعديل القائمة إلا بإعادة فتحها من وحدة المتابعة. هل تريد المتابعة؟')) return;
-    const { error } = await sb.from('committee_submissions').insert({ circular_id: circ.id, department_id: String(deptId), submitted_by: state.currentUser.full_name });
+    if(!confirm('اعتماد القائمة وإرسالها إلى وحدة المتابعة؟ (يمكنك إضافة لجان أخرى وإعادة الإرسال لاحقًا)')) return;
+    const nowIso = new Date().toISOString();
+    const { error } = info.sub
+      ? await sb.from('committee_submissions').update({ status: 'submitted', submitted_at: nowIso, submitted_by: state.currentUser.full_name }).eq('id', info.sub.id)
+      : await sb.from('committee_submissions').insert({ circular_id: circ.id, department_id: String(deptId), status: 'submitted', submitted_by: state.currentUser.full_name });
     if(error){
-      errEl.textContent = (error.code === '23505') ? 'سبق إرسال القائمة.' : 'تعذّر الإرسال، حاول مرة أخرى.';
+      errEl.textContent = 'تعذّر الإرسال، حاول مرة أخرى.';
       errEl.classList.remove('hidden');
       return;
     }
     await loadAll();
     closeModal();
-    alert('تم اعتماد القائمة وإرسالها لوحدة المتابعة بنجاح ✅');
+    alert('تم إرسال القائمة لوحدة المتابعة بنجاح ✅\nيمكنك إضافة لجان أخرى في أي وقت ثم إعادة الإرسال.');
   };
 }
 
@@ -1230,27 +1250,44 @@ function openCommitteeForm(deptId, committeeId){
   const draw = () => {
     const avail = facultyNames.filter(n => !used(n));
     overlay.innerHTML = `
-      <div class="modal modal-wide com-modal">
-        <h3>${existing ? 'تعديل اللجنة' : 'إضافة لجنة'}</h3>
-        <div class="field"><label>اسم اللجنة</label><input id="cfName" type="text" value="${escapeHtml(nameVal)}"></div>
-        <div class="field"><label>نوع اللجنة (التصنيف وفق التعميم)</label>
-          <div class="com-grp-opts" id="cfGrp">${COM_GROUPS.map(g => `<label class="com-grp-opt ${grpVal === g.k ? 'is-on' : ''}"><input type="radio" name="cfGrpR" value="${g.k}" ${grpVal === g.k ? 'checked' : ''}><b>${g.short}</b><span>${g.label.split(': ')[1].replace(/\.$/, '')}</span></label>`).join('')}</div></div>
-        <div class="field"><label>الأعضاء (${members.length})</label>
+      <div class="modal modal-wide com-modal com-form">
+        <h3>${existing ? 'تعديل اللجنة' : 'إضافة لجنة جديدة'}</h3>
+        <p class="com-lead">املأ بيانات اللجنة في ثلاث خطوات: الاسم، ثم النوع، ثم الأعضاء.</p>
+
+        <div class="com-step">
+          <div class="com-step-title"><span>1</span> اسم اللجنة</div>
+          <input id="cfName" type="text" class="com-input" placeholder="مثال: لجنة الجودة والاعتماد الأكاديمي" value="${escapeHtml(nameVal)}">
+          <p class="com-hint">اكتب الاسم كما ورد في قرار تشكيل اللجنة.</p>
+        </div>
+
+        <div class="com-step">
+          <div class="com-step-title"><span>2</span> نوع اللجنة</div>
+          <div class="com-grp-opts" id="cfGrp">${COM_GROUPS.map(g => `<label class="com-grp-opt ${grpVal === g.k ? 'is-on' : ''}"><input type="radio" name="cfGrpR" value="${g.k}" ${grpVal === g.k ? 'checked' : ''}><b>${g.short}</b><span>${g.label.split(': ')[1].replace(/\.$/, '')}</span></label>`).join('')}</div>
+          <p class="com-hint">اختر التصنيف المعتمد في التعميم: رئيسية أو فرعية أو صغيرة.</p>
+        </div>
+
+        <div class="com-step">
+          <div class="com-step-title"><span>3</span> أعضاء هيئة التدريس في اللجنة <em>(${members.length})</em></div>
+          <p class="com-hint" style="margin-top:0">اختر العضو من أعضاء القسم أو اكتب اسمه يدويًا، ثم حدّد نوع عضويته (رئيس / عضو) وعلّم «تأكيد المشاركة».</p>
+          <div class="com-addbox">
+            <div class="com-addrow">
+              <select id="cfPick" class="com-input"><option value="">اختر عضوًا من أعضاء القسم…</option>${avail.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('')}</select>
+              <button class="btn-primary" id="cfPickAdd" type="button">إضافة</button>
+            </div>
+            <div class="com-addrow">
+              <input id="cfManual" type="text" class="com-input" placeholder="أو اكتب اسم العضو يدويًا…">
+              <button class="btn-ghost" id="cfManualAdd" type="button">إضافة يدوية</button>
+            </div>
+          </div>
           ${members.length ? members.map((m, i) => `
             <div class="com-mrow">
-              <span class="com-mname">${escapeHtml(m.name)}${m.manual ? ' <small>(يدوي)</small>' : ''}</span>
-              <select class="cf-role" data-i="${i}"><option value="">نوع العضوية…</option><option value="رئيس" ${m.role === 'رئيس' ? 'selected' : ''}>رئيس</option><option value="عضو" ${m.role === 'عضو' ? 'selected' : ''}>عضو</option></select>
-              <label class="com-conf"><input type="checkbox" class="cf-conf" data-i="${i}" ${m.confirmed ? 'checked' : ''}> تأكيد المشاركة</label>
-              <button class="com-del" data-i="${i}" title="إزالة">✕</button>
+              <div class="com-mname">${escapeHtml(m.name)}${m.manual ? ' <small>(اسم يدوي)</small>' : ''}</div>
+              <div class="com-mctl">
+                <select class="cf-role com-input" data-i="${i}"><option value="">نوع العضوية…</option><option value="رئيس" ${m.role === 'رئيس' ? 'selected' : ''}>رئيس</option><option value="عضو" ${m.role === 'عضو' ? 'selected' : ''}>عضو</option></select>
+                <label class="com-conf"><input type="checkbox" class="cf-conf" data-i="${i}" ${m.confirmed ? 'checked' : ''}> تأكيد المشاركة</label>
+                <button class="com-del" data-i="${i}" title="إزالة العضو" type="button">✕</button>
+              </div>
             </div>`).join('') : '<p class="com-empty">لم تُضف أعضاء بعد.</p>'}
-          <div class="com-addrow">
-            <select id="cfPick"><option value="">اختر عضوًا من أعضاء القسم…</option>${avail.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('')}</select>
-            <button class="btn-ghost" id="cfPickAdd" type="button">إضافة</button>
-          </div>
-          <div class="com-addrow">
-            <input id="cfManual" type="text" placeholder="أو اكتب اسمًا يدويًا…">
-            <button class="btn-ghost" id="cfManualAdd" type="button">إضافة يدوية</button>
-          </div>
         </div>
         <p class="login-error ${errMsg ? '' : 'hidden'}" id="cfErr">${escapeHtml(errMsg)}</p>
         <div class="modal-actions">
@@ -1303,6 +1340,7 @@ function openCommitteeForm(deptId, committeeId){
       }
       const { error: mErr } = await sb.from('committee_members').insert(members.map(m => ({ committee_id: cid, member_name: m.name, role: m.role, confirmed: !!m.confirmed, is_manual: !!m.manual })));
       if(mErr){ errMsg = 'حُفظت اللجنة لكن تعذّر حفظ الأعضاء، افتحها وأعد المحاولة.'; await loadAll(); draw(); return; }
+      await comMarkModified(deptId);
       await loadAll();
       openCommitteesManager(deptId, false);
     };
@@ -1341,7 +1379,7 @@ function generateCommitteesReport(){
         ${list.map((c, i) => `<tr><td>${i + 1}</td><td style="text-align:right;font-weight:700">${escapeHtml(c.name)}</td><td style="text-align:right">${comMembersOf(c.id).map(m => `<span class="mem ${m.role === 'رئيس' ? 'head' : ''}">${escapeHtml(m.member_name)} <i>${escapeHtml(m.role)}</i>${m.confirmed ? '' : ' ⚠️'}</span>`).join('')}</td></tr>`).join('')}
         </tbody></table>`;
     }).join('');
-    const tag = r.info.status === 'sent' ? '<span class="tag tag-ok">أُرسلت</span>' : (r.info.status === 'draft' ? '<span class="tag tag-warn">غير معتمدة بعد</span>' : '<span class="tag tag-warn">لم تُرسل</span>');
+    const tag = r.info.status === 'sent' ? '<span class="tag tag-ok">أُرسلت</span>' : (r.info.status === 'modified' ? '<span class="tag tag-warn">عُدّلت بعد الإرسال</span>' : r.info.status === 'draft' ? '<span class="tag tag-warn">غير معتمدة بعد</span>' : '<span class="tag tag-warn">لم تُرسل</span>');
     return `<details class="dept-block" open><summary class="dept-block-head"><span>${escapeHtml(r.d.name)} ${tag}</span><span class="dept-block-count">${r.info.coms.length} لجنة · ${r.info.memCount} عضوية</span></summary>
       <div class="dept-body">${body || '<div class="empty-note">لم تُضف لجان بعد.</div>'}</div></details>`;
   }).join('');
