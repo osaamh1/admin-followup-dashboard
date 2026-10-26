@@ -408,6 +408,40 @@
 
   /* ===== الرسم البياني لإنجاز الأقسام ===== */
   .dept-chart-panel{margin-bottom:22px;}
+  /* ===== حصر اللجان ===== */
+  .circ-panel{margin-bottom:22px;padding:18px 20px;border-right:4px solid var(--teal);}
+  .com-meta{font-size:13.5px;color:var(--ink-soft);margin:6px 0;}
+  .com-late-txt{color:var(--redd);font-weight:700;}
+  .com-actions{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 4px;}
+  .com-chip{display:inline-block;font-size:12.5px;font-weight:700;padding:3px 12px;border-radius:20px;white-space:nowrap;}
+  .c-sent{background:var(--green-tint);color:var(--green);} .c-draft{background:var(--amber-tint);color:#6F4710;}
+  .c-late{background:var(--redd-tint);color:var(--redd);} .c-none{background:var(--paper);color:var(--ink-soft);border:1px solid var(--line);}
+  .com-table-wrap{overflow-x:auto;margin-top:12px;}
+  .com-table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  .com-table th{background:var(--paper);padding:8px 10px;font-size:12px;border-bottom:2px solid var(--line);text-align:center;}
+  .com-table td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:center;}
+  .com-table td:first-child{text-align:right;} .com-row-actions{white-space:nowrap;}
+  .com-reopen{color:var(--redd) !important;}
+  .com-modal{max-width:640px;}
+  .circ-body{white-space:pre-wrap;line-height:2;font-size:14.5px;background:var(--paper);border-radius:6px;padding:16px 18px;max-height:55vh;overflow-y:auto;}
+  .com-group{margin-top:14px;} .com-group-title{font-weight:700;color:var(--seal-dark);font-size:14px;margin-bottom:6px;} .com-group-title span{color:var(--ink-soft);font-weight:500;}
+  .com-card{border:1px solid var(--line);border-radius:6px;padding:10px 12px;margin-bottom:8px;background:var(--paper-raised);}
+  .com-card-head{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+  .com-mlist{list-style:none;margin:8px 0 0;padding:0;font-size:13.5px;}
+  .com-mlist li{display:flex;gap:10px;align-items:center;padding:3px 0;flex-wrap:wrap;} .com-mlist li>span:first-child{flex:1;min-width:140px;}
+  .com-role{background:var(--paper);border-radius:12px;padding:1px 10px;font-size:12px;font-weight:600;} .com-role.is-head{background:var(--amber-tint);color:#6F4710;}
+  .com-ok{color:var(--green);font-size:12px;} .com-no{color:var(--redd);font-size:12px;font-weight:700;}
+  .com-empty{color:var(--ink-soft);font-size:13px;margin:6px 0;} .com-warn{color:#8A5A12;font-size:12.5px;margin:6px 0 0;}
+  .com-add{margin-top:12px;}
+  .com-mrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;border:1px solid var(--line);border-radius:6px;padding:7px 10px;margin-bottom:6px;background:var(--paper);}
+  .com-mname{flex:1;min-width:150px;font-weight:600;font-size:13.5px;} .com-mname small{font-weight:400;color:var(--ink-soft);}
+  .com-mrow select{padding:5px 8px;font-size:13px;} .com-conf{font-size:12.5px;display:flex;align-items:center;gap:4px;cursor:pointer;}
+  .com-del{background:none;border:none;color:var(--redd);font-size:15px;cursor:pointer;}
+  .com-grp-opts{display:flex;gap:8px;flex-wrap:wrap;}
+  .com-grp-opt{flex:1 1 130px;border:1.5px solid var(--line);border-radius:8px;padding:9px 10px;cursor:pointer;display:flex;flex-direction:column;gap:2px;background:var(--paper-raised);font-size:12.5px;color:var(--ink-soft);}
+  .com-grp-opt input{position:absolute;opacity:0;pointer-events:none;} .com-grp-opt b{color:var(--seal-dark);font-size:14px;}
+  .com-grp-opt.is-on{border-color:var(--teal);background:var(--teal-tint);}
+  .com-addrow{display:flex;gap:8px;margin-top:8px;} .com-addrow select,.com-addrow input{flex:1;min-width:0;}
   .noabs-panel{margin-bottom:22px;}
   .head-actions{display:flex;flex-direction:column;align-items:stretch;gap:10px;}
   .noabs-box{border:1.5px dashed var(--teal);border-radius:10px;padding:10px 12px;background:#F2FAF9;display:flex;flex-direction:column;gap:7px;min-width:210px;}
@@ -639,7 +673,7 @@ let inactivityTimer = null;
 let inactivityWatcherStarted = false;
 
 let sb = null;
-let state = { tasks:[], decisions:[], departments:[], weeklyReports:[], absences:[], remoteRequests:[], noAbsence:[], noAbsWeek:null, courseSchedule:[], filterStatus:'all', filterDept:'all', searchText:'', currentUser:null, openDeptGroups:{ absence:new Set(), remote:new Set() }, scheduleMgmtDept:null, scheduleMgmtSearch:'' };
+let state = { tasks:[], decisions:[], departments:[], weeklyReports:[], absences:[], remoteRequests:[], noAbsence:[], noAbsWeek:null, circulars:[], comSubs:[], committees:[], comMembers:[], courseSchedule:[], filterStatus:'all', filterDept:'all', searchText:'', currentUser:null, openDeptGroups:{ absence:new Set(), remote:new Set() }, scheduleMgmtDept:null, scheduleMgmtSearch:'' };
 
 function isConfigured(){
   return SUPABASE_URL && SUPABASE_URL.startsWith('http') && SUPABASE_ANON_KEY && SUPABASE_ANON_KEY.length > 10;
@@ -873,7 +907,7 @@ async function fetchAllCourseSchedule(){
 }
 
 async function loadAll(){
-  const [{data:tasks}, {data:decisions}, {data:departments}, {data:weeklyReports}, {data:absences}, {data:remoteRequests}, {data:courseSchedule}, {data:noAbsence}] = await Promise.all([
+  const [{data:tasks}, {data:decisions}, {data:departments}, {data:weeklyReports}, {data:absences}, {data:remoteRequests}, {data:courseSchedule}, {data:noAbsence}, {data:circulars}, {data:comSubs}, {data:committees}, {data:comMembers}] = await Promise.all([
     sb.from('tasks').select('*').order('due_date', {ascending:true, nullsFirst:false}),
     sb.from('decisions').select('*').eq('status','active').order('decision_date', {ascending:false}),
     sb.from('departments').select('*').order('name'),
@@ -881,7 +915,11 @@ async function loadAll(){
     sb.from('faculty_absences').select('*').order('absence_date', {ascending:false}),
     sb.from('remote_lecture_requests').select('*').order('lecture_date', {ascending:false}),
     fetchAllCourseSchedule(),
-    sb.from('no_absence_declarations').select('*').order('week_start', {ascending:false}).limit(1000)
+    sb.from('no_absence_declarations').select('*').order('week_start', {ascending:false}).limit(1000),
+    sb.from('circulars').select('*').order('id', {ascending:false}),
+    sb.from('committee_submissions').select('*'),
+    sb.from('committees').select('*').order('id'),
+    sb.from('committee_members').select('*').order('id').limit(5000)
   ]);
   state.tasks = tasks || [];
   state.decisions = decisions || [];
@@ -891,6 +929,10 @@ async function loadAll(){
   state.remoteRequests = remoteRequests || [];
   state.courseSchedule = courseSchedule || [];
   state.noAbsence = noAbsence || [];
+  state.circulars = circulars || [];
+  state.comSubs = comSubs || [];
+  state.committees = committees || [];
+  state.comMembers = comMembers || [];
   flagOverdueLocally();
   renderStats();
   renderTasks();
@@ -900,6 +942,7 @@ async function loadAll(){
   // renderWeeklyPanel(); // تم إخفاء خدمة "تقارير داعمة" من الواجهة (البيانات محفوظة، يمكن إعادة تفعيلها لاحقًا)
   renderDeptChart();
   renderNoAbsencePanel();
+  renderCircularPanel();
   renderStorageUsage();
   renderAbsences();
   renderRemoteRequests();
@@ -925,6 +968,444 @@ function flagOverdueLocally(){
       t._displayStatus = t.status;
     }
   });
+}
+
+// ============================================
+// حصر اللجان وأعضاء هيئة التدريس (تعميم العميد)
+// ============================================
+const COM_GROUPS = [
+  { k:'أ', short:'رئيسية (أ)', label:'المجموعة (أ): اللجان الرئيسية' },
+  { k:'ب', short:'فرعية (ب)', label:'المجموعة (ب): اللجان الفرعية' },
+  { k:'ج', short:'صغيرة (ج)', label:'المجموعة (ج): اللجان الصغيرة' }
+];
+function comCircular(){ return (state.circulars || []).find(c => c.is_active) || null; }
+function comDeptCommittees(circId, deptId){
+  return (state.committees || []).filter(c => c.circular_id === circId && String(c.department_id) === String(deptId));
+}
+function comMembersOf(cid){ return (state.comMembers || []).filter(m => m.committee_id === cid); }
+function comSubmission(circId, deptId){
+  return (state.comSubs || []).find(s => s.circular_id === circId && String(s.department_id) === String(deptId)) || null;
+}
+function comDeptInfo(circ, deptId){
+  const coms = comDeptCommittees(circ.id, deptId);
+  const sub = comSubmission(circ.id, deptId);
+  const today = riyadhParts().iso;
+  const memCount = coms.reduce((n, c) => n + comMembersOf(c.id).length, 0);
+  const status = sub ? 'sent' : (coms.length ? 'draft' : 'none');
+  const late = !sub && today > circ.deadline;
+  return { coms, sub, status, late, memCount };
+}
+function comDaysLeft(circ){
+  return Math.round((Date.parse(circ.deadline + 'T00:00:00Z') - Date.parse(riyadhParts().iso + 'T00:00:00Z')) / 86400000);
+}
+function comFmtDate(iso){
+  try { return new Date(iso + 'T00:00:00Z').toLocaleDateString('ar-SA-u-ca-gregory', { timeZone:'UTC', weekday:'long', day:'numeric', month:'long', year:'numeric' }); }
+  catch(e){ return iso; }
+}
+function comFmtTime(iso){
+  try { return new Date(iso).toLocaleString('ar-SA-u-ca-gregory', { timeZone:'Asia/Riyadh', weekday:'long', day:'numeric', month:'long', hour:'numeric', minute:'2-digit' }); }
+  catch(e){ return ''; }
+}
+function comStatusChip(info){
+  if(info.status === 'sent') return '<span class="com-chip c-sent">✅ أُرسلت القائمة</span>';
+  if(info.late) return '<span class="com-chip c-late">⏰ متأخر عن الموعد' + (info.status === 'draft' ? ' (قيد الإعداد)' : '') + '</span>';
+  if(info.status === 'draft') return '<span class="com-chip c-draft">✏️ قيد الإعداد</span>';
+  return '<span class="com-chip c-none">⏳ لم يبدأ</span>';
+}
+
+function renderCircularPanel(){
+  const panel = document.getElementById('circPanel');
+  if(!panel) return;
+  const circ = comCircular();
+  if(!circ || !state.currentUser){ panel.classList.add('hidden'); panel.innerHTML = ''; return; }
+  panel.classList.remove('hidden');
+  const left = comDaysLeft(circ);
+  const leftTxt = left > 0 ? `المتبقي ${left} ${left === 1 ? 'يوم' : (left <= 10 ? 'أيام' : 'يومًا')}` : (left === 0 ? 'آخر يوم للإرسال اليوم' : 'انتهى الموعد');
+
+  if(state.currentUser.role === 'department'){
+    const deptId = state.currentUser.department_id;
+    const info = comDeptInfo(circ, deptId);
+    panel.innerHTML = `
+      <div class="panel-head">
+        <h2>📨 تعميم: ${escapeHtml(circ.subject || circ.title)}</h2>
+        ${comStatusChip(info)}
+      </div>
+      <p class="com-meta">صدر ${escapeHtml(comFmtDate(circ.issued_date))} · آخر موعد للإرسال: <b>${escapeHtml(comFmtDate(circ.deadline))}</b> · ${leftTxt}</p>
+      <p class="com-meta">اللجان المضافة: <b>${info.coms.length}</b> · الأعضاء المسجّلون: <b>${info.memCount}</b>${info.sub ? ' · أُرسلت: ' + escapeHtml(comFmtTime(info.sub.submitted_at)) : ''}</p>
+      <div class="com-actions">
+        <button class="btn-primary" id="circManageBtn">${info.sub ? '👁️ عرض قائمة اللجان' : (info.coms.length ? '✏️ متابعة إعداد قائمة اللجان' : '➕ ابدأ حصر اللجان')}</button>
+        <button class="btn-ghost" id="circReadBtn">📄 نص التعميم</button>
+      </div>`;
+    document.getElementById('circManageBtn').onclick = () => openCommitteesManager(deptId, !!info.sub);
+    document.getElementById('circReadBtn').onclick = () => openCircularText(circ);
+    return;
+  }
+
+  const rows = state.departments.map(d => ({ d, info: comDeptInfo(circ, d.id) }));
+  const nSent = rows.filter(r => r.info.status === 'sent').length;
+  const nLate = rows.filter(r => r.info.late).length;
+  panel.innerHTML = `
+    <div class="panel-head">
+      <h2>📨 متابعة تعميم: ${escapeHtml(circ.subject || circ.title)}</h2>
+      <span class="com-chip ${nSent === rows.length ? 'c-sent' : 'c-draft'}">أرسل ${nSent} من ${rows.length}</span>
+    </div>
+    <p class="com-meta">صدر ${escapeHtml(comFmtDate(circ.issued_date))} · الموعد النهائي: <b>${escapeHtml(comFmtDate(circ.deadline))}</b> · ${leftTxt}${nLate ? ` · <span class="com-late-txt">متأخر: ${nLate}</span>` : ''}</p>
+    <div class="com-actions">
+      <button class="btn-primary" id="circReportBtn">📊 تقرير اللجان</button>
+      <button class="btn-ghost" id="circReadBtn">📄 نص التعميم / طباعة</button>
+      <button class="btn-ghost" id="circRemindBtn">📋 نسخ تذكير للأقسام غير المُرسلة</button>
+    </div>
+    <div class="com-table-wrap"><table class="com-table">
+      <thead><tr><th>القسم</th><th>الحالة</th><th>اللجان</th><th>الأعضاء</th><th>وقت الإرسال</th><th></th></tr></thead>
+      <tbody>
+      ${rows.map(r => `<tr>
+        <td><b>${escapeHtml(r.d.name)}</b></td>
+        <td>${comStatusChip(r.info)}</td>
+        <td>${r.info.coms.length}</td>
+        <td>${r.info.memCount}</td>
+        <td>${r.info.sub ? escapeHtml(comFmtTime(r.info.sub.submitted_at)) : '—'}</td>
+        <td class="com-row-actions">
+          <button class="btn-text" data-view="${escapeHtml(String(r.d.id))}">عرض</button>
+          ${r.info.sub ? `<button class="btn-text com-reopen" data-reopen="${escapeHtml(String(r.d.id))}">إعادة فتح</button>` : ''}
+        </td></tr>`).join('')}
+      </tbody></table></div>`;
+  document.getElementById('circReportBtn').onclick = () => generateCommitteesReport();
+  document.getElementById('circReadBtn').onclick = () => openCircularText(circ);
+  document.getElementById('circRemindBtn').onclick = () => copyCommitteesReminder(circ);
+  panel.querySelectorAll('[data-view]').forEach(b => b.onclick = () => openCommitteesManager(b.dataset.view, true));
+  panel.querySelectorAll('[data-reopen]').forEach(b => b.onclick = async () => {
+    const dept = state.departments.find(x => String(x.id) === b.dataset.reopen);
+    if(!confirm(`إعادة فتح قائمة اللجان لقسم «${dept ? dept.name : ''}» ليتمكن من تعديلها؟`)) return;
+    const { error } = await sb.from('committee_submissions').delete().eq('circular_id', circ.id).eq('department_id', b.dataset.reopen);
+    if(error){ alert('تعذّرت إعادة الفتح، حاول مرة أخرى.'); return; }
+    await loadAll();
+  });
+}
+
+function copyCommitteesReminder(circ){
+  const pending = state.departments.filter(d => comDeptInfo(circ, d.id).status !== 'sent');
+  if(!pending.length){ alert('جميع الأقسام أرسلت قوائمها ✅'); return; }
+  const txt = `السلام عليكم ورحمة الله وبركاته\nتذكير: تعميم «${circ.subject || circ.title}»\nالموعد النهائي: ${comFmtDate(circ.deadline)}.\nيرجى استكمال القائمة وإرسالها من خلال منصة وحدة المتابعة الإدارية.\n\nالأقسام التي لم ترسل بعد:\n` + pending.map(d => '• ' + d.name).join('\n') + '\n\nشاكرين تعاونكم.';
+  const done = () => alert('تم نسخ نص التذكير، الصقه في واتساب.');
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(done, () => window.prompt('انسخ النص:', txt));
+  } else { window.prompt('انسخ النص:', txt); }
+}
+
+function openCircularText(circ){
+  const overlay = document.getElementById('modalOverlay');
+  overlay.classList.remove('hidden');
+  overlay.innerHTML = `
+    <div class="modal modal-wide com-modal">
+      <h3>📄 ${escapeHtml(circ.title)}</h3>
+      <div class="circ-body">${escapeHtml(circ.body)}</div>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="ctClose">إغلاق</button>
+        <button class="btn-ghost" id="ctCopy">📋 نسخ النص</button>
+        <button class="btn-primary" id="ctPrint">🖨️ طباعة التعميم</button>
+      </div>
+    </div>`;
+  document.getElementById('ctClose').onclick = closeModal;
+  document.getElementById('ctCopy').onclick = () => {
+    const done = () => alert('تم نسخ نص التعميم.');
+    if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(circ.body).then(done, () => window.prompt('انسخ النص:', circ.body));
+    else window.prompt('انسخ النص:', circ.body);
+  };
+  document.getElementById('ctPrint').onclick = () => {
+    const html = `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>${escapeHtml(circ.title)}</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@500;700;900&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{font-family:'IBM Plex Sans Arabic',sans-serif;color:#1C2321;margin:0;padding:40px;font-size:17px;line-height:2;}
+.sheet{max-width:760px;margin:0 auto;}
+.head{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #12294F;padding-bottom:14px;margin-bottom:26px;}
+.head img{height:70px;} .head h1{font-family:'Noto Kufi Arabic',sans-serif;font-size:26px;color:#12294F;margin:0;}
+.head small{display:block;color:#4A524E;font-size:13px;}
+.body{white-space:pre-wrap;}
+.bar{text-align:left;margin-bottom:16px;} .bar button{background:#12294F;color:#fff;border:0;padding:10px 20px;border-radius:6px;font-size:14px;cursor:pointer;font-family:inherit;}
+@media print{.bar{display:none;} body{padding:0;}}
+</style></head><body><div class="sheet"><div class="bar"><button onclick="window.print()">🖨 طباعة / حفظ PDF</button></div>
+<div class="head"><div><h1>${escapeHtml(circ.title)}</h1><small>كلية الشريعة — جامعة القصيم · ${escapeHtml(comFmtDate(circ.issued_date))}</small></div><img src="${LOGO_DATA_URI}" alt="شعار الكلية"></div>
+<div class="body">${escapeHtml(circ.body)}</div></div></body></html>`;
+    const w = window.open('', '_blank');
+    w.document.write(html); w.document.close();
+  };
+}
+
+// ----- مدير قائمة اللجان للقسم -----
+function openCommitteesManager(deptId, readOnly){
+  const circ = comCircular();
+  if(!circ) return;
+  const dept = state.departments.find(d => String(d.id) === String(deptId));
+  const info = comDeptInfo(circ, deptId);
+  const locked = readOnly || !!info.sub || state.currentUser.role !== 'department';
+  const overlay = document.getElementById('modalOverlay');
+  overlay.classList.remove('hidden');
+
+  const comCard = c => {
+    const ms = comMembersOf(c.id);
+    const hasHead = ms.some(m => m.role === 'رئيس');
+    return `<div class="com-card">
+      <div class="com-card-head">
+        <b>${escapeHtml(c.name)}</b>
+        ${locked ? '' : `<span><button class="btn-text" data-edit="${c.id}">تعديل</button> <button class="btn-text com-reopen" data-del="${c.id}">حذف</button></span>`}
+      </div>
+      ${ms.length ? `<ul class="com-mlist">${ms.map(m => `<li><span>${escapeHtml(m.member_name)}</span><span class="com-role ${m.role === 'رئيس' ? 'is-head' : ''}">${escapeHtml(m.role)}</span>${m.confirmed ? '<span class="com-ok">✔ مؤكَّد</span>' : '<span class="com-no">غير مؤكَّد</span>'}</li>`).join('')}</ul>` : '<p class="com-empty">لا يوجد أعضاء.</p>'}
+      ${ms.length && !hasHead ? '<p class="com-warn">⚠️ لم يُحدَّد رئيس لهذه اللجنة.</p>' : ''}
+    </div>`;
+  };
+
+  overlay.innerHTML = `
+    <div class="modal modal-wide com-modal">
+      <h3>📨 حصر اللجان — ${escapeHtml(dept ? dept.name : '')}</h3>
+      <p class="com-meta">${comStatusChip(info)} ${info.sub ? ' · أُرسلت ' + escapeHtml(comFmtTime(info.sub.submitted_at)) : ' · الموعد النهائي: ' + escapeHtml(comFmtDate(circ.deadline))}</p>
+      ${COM_GROUPS.map(g => {
+        const list = info.coms.filter(c => c.grp === g.k);
+        return `<div class="com-group"><div class="com-group-title">${g.label} <span>(${list.length})</span></div>
+          ${list.length ? list.map(comCard).join('') : '<p class="com-empty">لا توجد لجان في هذه المجموعة.</p>'}
+        </div>`;
+      }).join('')}
+      ${locked ? '' : '<button class="btn-ghost com-add" id="comAddBtn">➕ إضافة لجنة</button>'}
+      <p class="login-error hidden" id="comSubmitErr"></p>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="comClose">إغلاق</button>
+        ${locked ? '' : '<button class="btn-primary" id="comSubmitBtn">📤 اعتماد وإرسال القائمة</button>'}
+      </div>
+    </div>`;
+  document.getElementById('comClose').onclick = closeModal;
+  if(locked) return;
+  document.getElementById('comAddBtn').onclick = () => openCommitteeForm(deptId, null);
+  overlay.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => openCommitteeForm(deptId, Number(b.dataset.edit)));
+  overlay.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
+    const c = state.committees.find(x => x.id === Number(b.dataset.del));
+    if(!c || !confirm(`حذف لجنة «${c.name}» وأعضائها؟`)) return;
+    const { error } = await sb.from('committees').delete().eq('id', c.id);
+    if(error){ alert('تعذّر الحذف، حاول مرة أخرى.'); return; }
+    await loadAll();
+    openCommitteesManager(deptId, false);
+  });
+  document.getElementById('comSubmitBtn').onclick = async () => {
+    const errEl = document.getElementById('comSubmitErr');
+    const errs = [];
+    if(!info.coms.length) errs.push('أضف لجنة واحدة على الأقل.');
+    info.coms.forEach(c => {
+      const ms = comMembersOf(c.id);
+      if(!ms.length) errs.push(`لجنة «${c.name}»: لا يوجد أعضاء.`);
+      ms.forEach(m => {
+        if(!m.role) errs.push(`لجنة «${c.name}»: حدّد نوع عضوية «${m.member_name}».`);
+        if(!m.confirmed) errs.push(`لجنة «${c.name}»: لم تُؤكَّد مشاركة «${m.member_name}».`);
+      });
+    });
+    if(errs.length){
+      errEl.innerHTML = '<b>لا يمكن الإرسال قبل استكمال الآتي:</b><br>' + errs.slice(0, 12).map(escapeHtml).join('<br>') + (errs.length > 12 ? `<br>… و${errs.length - 12} ملاحظات أخرى` : '');
+      errEl.classList.remove('hidden');
+      return;
+    }
+    errEl.classList.add('hidden');
+    if(!confirm('بعد الاعتماد والإرسال لن تتمكن من تعديل القائمة إلا بإعادة فتحها من وحدة المتابعة. هل تريد المتابعة؟')) return;
+    const { error } = await sb.from('committee_submissions').insert({ circular_id: circ.id, department_id: String(deptId), submitted_by: state.currentUser.full_name });
+    if(error){
+      errEl.textContent = (error.code === '23505') ? 'سبق إرسال القائمة.' : 'تعذّر الإرسال، حاول مرة أخرى.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+    await loadAll();
+    closeModal();
+    alert('تم اعتماد القائمة وإرسالها لوحدة المتابعة بنجاح ✅');
+  };
+}
+
+// ----- نموذج إضافة/تعديل لجنة -----
+function openCommitteeForm(deptId, committeeId){
+  const circ = comCircular();
+  const existing = committeeId ? state.committees.find(c => c.id === committeeId) : null;
+  let members = existing ? comMembersOf(existing.id).map(m => ({ name: m.member_name, role: m.role || '', confirmed: !!m.confirmed, manual: !!m.is_manual })) : [];
+  let nameVal = existing ? existing.name : '';
+  let grpVal = existing ? existing.grp : '';
+  const facultyNames = facultyNamesForDept(deptId);
+  const overlay = document.getElementById('modalOverlay');
+  overlay.classList.remove('hidden');
+  let errMsg = '';
+  const used = n => members.some(m => normFacultyName(m.name) === normFacultyName(n));
+
+  const draw = () => {
+    const avail = facultyNames.filter(n => !used(n));
+    overlay.innerHTML = `
+      <div class="modal modal-wide com-modal">
+        <h3>${existing ? 'تعديل اللجنة' : 'إضافة لجنة'}</h3>
+        <div class="field"><label>اسم اللجنة</label><input id="cfName" type="text" value="${escapeHtml(nameVal)}"></div>
+        <div class="field"><label>نوع اللجنة (التصنيف وفق التعميم)</label>
+          <div class="com-grp-opts" id="cfGrp">${COM_GROUPS.map(g => `<label class="com-grp-opt ${grpVal === g.k ? 'is-on' : ''}"><input type="radio" name="cfGrpR" value="${g.k}" ${grpVal === g.k ? 'checked' : ''}><b>${g.short}</b><span>${g.label.split(': ')[1].replace(/\.$/, '')}</span></label>`).join('')}</div></div>
+        <div class="field"><label>الأعضاء (${members.length})</label>
+          ${members.length ? members.map((m, i) => `
+            <div class="com-mrow">
+              <span class="com-mname">${escapeHtml(m.name)}${m.manual ? ' <small>(يدوي)</small>' : ''}</span>
+              <select class="cf-role" data-i="${i}"><option value="">نوع العضوية…</option><option value="رئيس" ${m.role === 'رئيس' ? 'selected' : ''}>رئيس</option><option value="عضو" ${m.role === 'عضو' ? 'selected' : ''}>عضو</option></select>
+              <label class="com-conf"><input type="checkbox" class="cf-conf" data-i="${i}" ${m.confirmed ? 'checked' : ''}> تأكيد المشاركة</label>
+              <button class="com-del" data-i="${i}" title="إزالة">✕</button>
+            </div>`).join('') : '<p class="com-empty">لم تُضف أعضاء بعد.</p>'}
+          <div class="com-addrow">
+            <select id="cfPick"><option value="">اختر عضوًا من أعضاء القسم…</option>${avail.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('')}</select>
+            <button class="btn-ghost" id="cfPickAdd" type="button">إضافة</button>
+          </div>
+          <div class="com-addrow">
+            <input id="cfManual" type="text" placeholder="أو اكتب اسمًا يدويًا…">
+            <button class="btn-ghost" id="cfManualAdd" type="button">إضافة يدوية</button>
+          </div>
+        </div>
+        <p class="login-error ${errMsg ? '' : 'hidden'}" id="cfErr">${escapeHtml(errMsg)}</p>
+        <div class="modal-actions">
+          <button class="btn-ghost" id="cfCancel">رجوع</button>
+          <button class="btn-primary" id="cfSave">حفظ اللجنة</button>
+        </div>
+      </div>`;
+    const sync = () => { nameVal = document.getElementById('cfName').value; const gr = overlay.querySelector('input[name=cfGrpR]:checked'); grpVal = gr ? gr.value : ''; };
+    document.getElementById('cfName').oninput = sync;
+    overlay.querySelectorAll('input[name=cfGrpR]').forEach(r => r.onchange = () => { sync(); overlay.querySelectorAll('.com-grp-opt').forEach(l => l.classList.toggle('is-on', l.contains(r) && r.checked)); });
+    overlay.querySelectorAll('.cf-role').forEach(s => s.onchange = () => { members[Number(s.dataset.i)].role = s.value; });
+    overlay.querySelectorAll('.cf-conf').forEach(c => c.onchange = () => { members[Number(c.dataset.i)].confirmed = c.checked; });
+    overlay.querySelectorAll('.com-del').forEach(b => b.onclick = () => { sync(); members.splice(Number(b.dataset.i), 1); errMsg = ''; draw(); });
+    document.getElementById('cfPickAdd').onclick = () => {
+      sync(); const v = document.getElementById('cfPick').value;
+      if(!v) return; members.push({ name: v, role: '', confirmed: false, manual: false }); errMsg = ''; draw();
+    };
+    const addManual = () => {
+      sync(); const v = document.getElementById('cfManual').value.trim().replace(/\s+/g, ' ');
+      if(!v) return;
+      if(used(v)){ errMsg = 'هذا الاسم مضاف بالفعل في اللجنة.'; draw(); return; }
+      const inList = facultyNames.some(n => normFacultyName(n) === normFacultyName(v));
+      members.push({ name: v, role: '', confirmed: false, manual: !inList }); errMsg = ''; draw();
+    };
+    document.getElementById('cfManualAdd').onclick = addManual;
+    document.getElementById('cfManual').onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); addManual(); } };
+    document.getElementById('cfCancel').onclick = () => openCommitteesManager(deptId, false);
+    document.getElementById('cfSave').onclick = async () => {
+      sync();
+      const name = nameVal.trim().replace(/\s+/g, ' ');
+      if(!name){ errMsg = 'اكتب اسم اللجنة.'; draw(); return; }
+      if(!grpVal){ errMsg = 'اختر نوع اللجنة: رئيسية (أ) أو فرعية (ب) أو صغيرة (ج).'; draw(); return; }
+      if(!members.length){ errMsg = 'أضف عضوًا واحدًا على الأقل.'; draw(); return; }
+      const noRole = members.find(m => !m.role);
+      if(noRole){ errMsg = `حدّد نوع العضوية (رئيس / عضو) لـ «${noRole.name}».`; draw(); return; }
+      const dup = comDeptCommittees(circ.id, deptId).find(c => normText(c.name) === normText(name) && (!existing || c.id !== existing.id));
+      if(dup){ errMsg = 'توجد لجنة بنفس الاسم في القسم.'; draw(); return; }
+      const btn = document.getElementById('cfSave'); btn.disabled = true; btn.textContent = 'جارٍ الحفظ...';
+      let cid;
+      if(existing){
+        const { error } = await sb.from('committees').update({ name, grp: grpVal }).eq('id', existing.id);
+        if(error){ errMsg = 'تعذّر الحفظ، حاول مرة أخرى.'; draw(); return; }
+        cid = existing.id;
+        const { error: dErr } = await sb.from('committee_members').delete().eq('committee_id', cid);
+        if(dErr){ errMsg = 'تعذّر تحديث الأعضاء، حاول مرة أخرى.'; draw(); return; }
+      } else {
+        const { data, error } = await sb.from('committees').insert({ circular_id: circ.id, department_id: String(deptId), name, grp: grpVal, created_by: state.currentUser.full_name }).select().single();
+        if(error || !data){ errMsg = 'تعذّر الحفظ، حاول مرة أخرى.'; draw(); return; }
+        cid = data.id;
+      }
+      const { error: mErr } = await sb.from('committee_members').insert(members.map(m => ({ committee_id: cid, member_name: m.name, role: m.role, confirmed: !!m.confirmed, is_manual: !!m.manual })));
+      if(mErr){ errMsg = 'حُفظت اللجنة لكن تعذّر حفظ الأعضاء، افتحها وأعد المحاولة.'; await loadAll(); draw(); return; }
+      await loadAll();
+      openCommitteesManager(deptId, false);
+    };
+  };
+  draw();
+}
+
+// ----- تقرير اللجان -----
+function generateCommitteesReport(){
+  const circ = comCircular();
+  if(!circ) return;
+  const rows = state.departments.map(d => ({ d, info: comDeptInfo(circ, d.id) }));
+  const allComs = rows.flatMap(r => r.info.coms);
+  const grpCount = k => allComs.filter(c => c.grp === k).length;
+  const nSent = rows.filter(r => r.info.status === 'sent').length;
+
+  // حمل الأعضاء: عدد اللجان لكل عضو
+  const load = new Map();
+  rows.forEach(r => r.info.coms.forEach(c => comMembersOf(c.id).forEach(m => {
+    const key = normFacultyName(m.member_name) + '|' + r.d.id;
+    if(!load.has(key)) load.set(key, { name: m.member_name, dept: r.d.name, n: 0, head: 0, a: 0, b: 0, g: 0, sent: r.info.status === 'sent', list: [] });
+    const o = load.get(key); o.n++; if(m.role === 'رئيس') o.head++;
+    if(c.grp === 'أ') o.a++; else if(c.grp === 'ب') o.b++; else o.g++;
+    o.list.push(c.name + ' (' + m.role + ')');
+  })));
+  const people = [...load.values()].sort((x, y) => y.n - x.n || x.name.localeCompare(y.name, 'ar'));
+  const unconfirmed = [];
+  rows.forEach(r => r.info.coms.forEach(c => comMembersOf(c.id).forEach(m => { if(!m.confirmed) unconfirmed.push({ dept: r.d.name, com: c.name, name: m.member_name }); })));
+
+  const deptBlocks = rows.map(r => {
+    const body = COM_GROUPS.map(g => {
+      const list = r.info.coms.filter(c => c.grp === g.k);
+      if(!list.length) return '';
+      return `<div class="grp-title">${g.label} <span>(${list.length})</span></div>
+        <table><thead><tr><th style="width:36px">#</th><th style="width:30%">اللجنة</th><th>الأعضاء ونوع العضوية</th></tr></thead><tbody>
+        ${list.map((c, i) => `<tr><td>${i + 1}</td><td style="text-align:right;font-weight:700">${escapeHtml(c.name)}</td><td style="text-align:right">${comMembersOf(c.id).map(m => `<span class="mem ${m.role === 'رئيس' ? 'head' : ''}">${escapeHtml(m.member_name)} <i>${escapeHtml(m.role)}</i>${m.confirmed ? '' : ' ⚠️'}</span>`).join('')}</td></tr>`).join('')}
+        </tbody></table>`;
+    }).join('');
+    const tag = r.info.status === 'sent' ? '<span class="tag tag-ok">أُرسلت</span>' : (r.info.status === 'draft' ? '<span class="tag tag-warn">غير معتمدة بعد</span>' : '<span class="tag tag-warn">لم تُرسل</span>');
+    return `<details class="dept-block" open><summary class="dept-block-head"><span>${escapeHtml(r.d.name)} ${tag}</span><span class="dept-block-count">${r.info.coms.length} لجنة · ${r.info.memCount} عضوية</span></summary>
+      <div class="dept-body">${body || '<div class="empty-note">لم تُضف لجان بعد.</div>'}</div></details>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="ar" dir="rtl"><head><meta charset="UTF-8">
+<title>تقرير حصر اللجان — ${escapeHtml(circ.subject || circ.title)}</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@500;700;900&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#1C2321;--ink-soft:#4A524E;--paper:#EEEEE5;--line:#D7D3C5;--seal-dark:#12294F;--teal:#1C9E93;--teal-tint:#DEF3F1;--green:#2D6A4C;--green-tint:#DEEAE2;--redd:#C0392B;--redd-tint:#F7DCD8;--amber:#9C6B1E;--amber-tint:#F1E7D3;}
+*{box-sizing:border-box;} html{background:linear-gradient(180deg,var(--teal-tint) 0%,var(--paper) 320px);}
+body{font-family:'IBM Plex Sans Arabic',sans-serif;color:var(--ink);margin:0;padding:40px 24px;font-size:15px;line-height:1.7;}
+.sheet{max-width:920px;margin:0 auto;background:#fff;border-radius:10px;padding:36px 40px;box-shadow:0 8px 28px rgba(18,41,79,.12);border-top:6px solid var(--teal);}
+h1,h2{font-family:'Noto Kufi Arabic',sans-serif;margin:0;}
+.report-header{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid var(--teal);padding-bottom:18px;margin-bottom:22px;}
+.report-header img{height:64px;} .report-header h1{font-size:23px;color:var(--seal-dark);} .report-sub{color:var(--ink-soft);font-size:13px;margin-top:6px;}
+.summary-strip{display:flex;gap:12px;margin-bottom:26px;flex-wrap:wrap;}
+.summary-box{flex:1 1 120px;border-radius:8px;padding:14px;text-align:center;background:var(--teal-tint);border:1px solid #BFE3DF;}
+.summary-box .num{font-family:'Noto Kufi Arabic',sans-serif;font-size:30px;font-weight:900;color:var(--seal-dark);} .summary-box .lbl{font-size:12px;color:var(--ink-soft);font-weight:600;}
+h2{font-size:17px;color:var(--seal-dark);margin:28px 0 12px;}
+.dept-block{border:1px solid var(--line);border-radius:8px;margin-bottom:14px;overflow:hidden;}
+.dept-block-head{display:flex;justify-content:space-between;align-items:center;padding:12px 18px;background:var(--seal-dark);color:#fff;font-family:'Noto Kufi Arabic',sans-serif;font-weight:700;font-size:15px;cursor:pointer;gap:10px;}
+.dept-block-count{background:rgba(255,255,255,.18);padding:2px 12px;border-radius:20px;font-size:12.5px;font-family:'IBM Plex Sans Arabic',sans-serif;font-weight:500;}
+.dept-body{padding:6px 14px 14px;} .grp-title{font-weight:700;color:var(--seal-dark);margin:14px 0 6px;font-size:14px;} .grp-title span{color:var(--ink-soft);font-weight:500;}
+table{width:100%;border-collapse:collapse;font-size:13.5px;}
+th{background:var(--paper);color:var(--seal-dark);padding:9px 10px;font-size:12px;border-bottom:2px solid var(--line);}
+td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:middle;text-align:center;} tr:last-child td{border-bottom:none;}
+.mem{display:inline-block;background:var(--paper);border-radius:14px;padding:2px 11px;margin:2px 0 2px 5px;font-size:12.5px;} .mem i{font-style:normal;color:var(--ink-soft);font-size:11.5px;margin-right:4px;}
+.mem.head{background:var(--amber-tint);color:#6F4710;font-weight:700;} .mem.head i{color:#6F4710;}
+.tag{display:inline-block;padding:2px 11px;border-radius:20px;font-size:11.5px;font-weight:700;margin-right:8px;font-family:'IBM Plex Sans Arabic',sans-serif;} .tag-ok{background:var(--green-tint);color:var(--green);} .tag-warn{background:var(--redd-tint);color:var(--redd);}
+.empty-note{color:var(--ink-soft);text-align:center;padding:22px;background:var(--paper);border-radius:6px;margin-top:10px;}
+.note{font-size:12.5px;color:var(--ink-soft);margin:-6px 0 10px;}
+.report-footer{margin-top:30px;padding-top:14px;border-top:2px solid var(--line);font-size:12px;color:var(--ink-soft);display:flex;justify-content:space-between;}
+.print-bar{max-width:920px;margin:0 auto 16px;text-align:left;display:flex;gap:10px;justify-content:flex-end;}
+.print-bar button{background:var(--seal-dark);color:#fff;border:none;padding:11px 20px;border-radius:6px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;} .print-bar .btn-alt{background:var(--teal);}
+@media print{html{background:#fff;} *{-webkit-print-color-adjust:exact;print-color-adjust:exact;} .print-bar{display:none;} body{padding:0;} .sheet{box-shadow:none;border-radius:0;max-width:none;} .dept-block{break-inside:avoid-page;}}
+@media (max-width:600px){.sheet{padding:22px 16px;} .report-header{flex-direction:column-reverse;align-items:flex-start;gap:10px;}}
+</style></head><body>
+<div class="print-bar">
+  <button onclick="window.print()">🖨 طباعة / حفظ PDF</button>
+  <button class="btn-alt" onclick="if(window.opener&&window.opener.afuSaveReportHtml){window.opener.afuSaveReportHtml(document,'AFU-committees-report.html',this);}else{alert('أعد فتح التقرير من المنصة ثم احفظه.');}">💾 حفظ كملف تفاعلي (HTML)</button>
+</div>
+<div class="sheet">
+  <div class="report-header"><div><h1>تقرير حصر اللجان وأعضاء هيئة التدريس</h1><div class="report-sub">كلية الشريعة — جامعة القصيم · حتى ${escapeHtml(new Date().toLocaleDateString('ar-SA-u-ca-gregory'))}</div></div><img src="${LOGO_DATA_URI}" alt="شعار الكلية"></div>
+  <div class="summary-strip">
+    <div class="summary-box"><div class="num">${nSent}/${rows.length}</div><div class="lbl">أقسام أرسلت قوائمها</div></div>
+    <div class="summary-box"><div class="num">${allComs.length}</div><div class="lbl">إجمالي اللجان</div></div>
+    <div class="summary-box"><div class="num">${grpCount('أ')}</div><div class="lbl">رئيسية (أ)</div></div>
+    <div class="summary-box"><div class="num">${grpCount('ب')}</div><div class="lbl">فرعية (ب)</div></div>
+    <div class="summary-box"><div class="num">${grpCount('ج')}</div><div class="lbl">صغيرة (ج)</div></div>
+    <div class="summary-box"><div class="num">${people.length}</div><div class="lbl">أعضاء مشاركون</div></div>
+  </div>
+  <h2>اللجان حسب الأقسام</h2>
+  ${deptBlocks}
+  <h2>مشاركة الأعضاء في اللجان</h2>
+  <p class="note">مرتبة تنازليًا بعدد اللجان التي يشارك فيها العضو، لتبيّن توزيع الأعباء.</p>
+  ${people.length ? `<table><thead><tr><th>#</th><th>العضو</th><th>القسم</th><th>إجمالي اللجان</th><th>رئاسة</th><th>أ</th><th>ب</th><th>ج</th></tr></thead><tbody>
+  ${people.map((p, i) => `<tr><td>${i + 1}</td><td style="text-align:right;font-weight:700">${escapeHtml(p.name)}</td><td>${escapeHtml(p.dept)}</td><td><b>${p.n}</b></td><td>${p.head || '—'}</td><td>${p.a || '—'}</td><td>${p.b || '—'}</td><td>${p.g || '—'}</td></tr>`).join('')}
+  </tbody></table>` : '<div class="empty-note">لا توجد بيانات بعد.</div>'}
+  ${unconfirmed.length ? `<h2>مشاركات لم تُؤكَّد بعد (${unconfirmed.length})</h2><table><thead><tr><th>القسم</th><th>اللجنة</th><th>العضو</th></tr></thead><tbody>${unconfirmed.map(u => `<tr><td>${escapeHtml(u.dept)}</td><td>${escapeHtml(u.com)}</td><td>${escapeHtml(u.name)}</td></tr>`).join('')}</tbody></table>` : ''}
+  <div class="report-footer"><span>أُعدّ بواسطة: ${escapeHtml(state.currentUser.full_name)}</span><span>وحدة المتابعة الإدارية — كلية الشريعة</span></div>
+</div></body></html>`;
+  const w = window.open('', '_blank');
+  w.document.write(html); w.document.close();
 }
 
 function renderShell(){
@@ -959,6 +1440,8 @@ function renderShell(){
       <details class="panel schedule-mgmt-panel hidden" id="scheduleManagementPanel"></details>
 
       <section id="alertBanner" class="alert-banner hidden"></section>
+
+      <section class="panel circ-panel hidden" id="circPanel"></section>
 
       <section class="stat-strip" id="statStrip"></section>
 
