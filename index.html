@@ -1818,7 +1818,7 @@ function renderTasks(){
     <tr class="row-${statusSlug(t._displayStatus)}">
       <td>
         <div class="task-title">${escapeHtml(t.title)}</div>
-        ${t.notes ? `<div class="task-meta">${escapeHtml(t.notes)}</div>` : ''}
+        ${t.notes ? `<div class="task-meta" style="white-space:pre-line">${linkifyText(t.notes)}</div>` : ''}
         ${decTitle ? `<div class="task-link">🔗 مرتبطة بقرار: ${escapeHtml(decTitle)}</div>` : ''}
         <div class="task-attach">
           ${t.attachment_path ? `<a href="#" id="task-attach-${t.id}" class="attach-link">📎 ${escapeHtml(t.attachment_name || 'تحميل المرفق')}</a>` : ''}
@@ -4104,6 +4104,10 @@ async function attachDownloadLinks(){
 }
 
 
+// يحوّل الروابط داخل نص إلى روابط قابلة للنقر (بعد تهريب النص)
+function linkifyText(str){
+  return escapeHtml(str).replace(/(https?:\/\/[^\s<>"']+)/g, '<a href="$1" target="_blank" rel="noopener" style="color:var(--seal-dark);font-weight:600;word-break:break-all;">فتح الرابط ↗</a>');
+}
 function escapeHtml(str){
   const div = document.createElement('div');
   div.textContent = str ?? '';
