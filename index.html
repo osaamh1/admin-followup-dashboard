@@ -1000,7 +1000,7 @@ function flagOverdueLocally(){
 // حصر اللجان وأعضاء هيئة التدريس (تعميم العميد)
 // ============================================
 // إظهار خاصية حصر اللجان للجميع (اجعلها true عند اعتماد التعميم وإرساله للأقسام)
-const SHOW_COMMITTEES = false;
+const SHOW_COMMITTEES = true;
 function comEnabled(){
   try { if(new URLSearchParams(location.search).get('committees') === '1') return true; } catch(e){}
   return SHOW_COMMITTEES;
