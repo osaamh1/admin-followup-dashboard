@@ -1016,7 +1016,10 @@ function comCircular(){ return (state.circulars || []).find(c => c.is_active) ||
 function comDeptCommittees(circId, deptId){
   return (state.committees || []).filter(c => c.circular_id === circId && String(c.department_id) === String(deptId));
 }
-function comMembersOf(cid){ return (state.comMembers || []).filter(m => m.committee_id === cid); }
+function comMembersOf(cid){
+  const rank = r => r === 'رئيس' ? 0 : (r === 'أمين' ? 1 : 2);
+  return (state.comMembers || []).filter(m => m.committee_id === cid).sort((a, b) => rank(a.role) - rank(b.role) || (a.id - b.id));
+}
 function comSubmission(circId, deptId){
   return (state.comSubs || []).find(s => s.circular_id === circId && String(s.department_id) === String(deptId)) || null;
 }
@@ -1522,7 +1525,7 @@ const COM_TBL_CSS = `
 .cmt-block{border:1px solid #D7D3C5;border-radius:10px;overflow:hidden;margin-bottom:18px;background:#fff;break-inside:avoid;}
 .cmt-block-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#12294F;color:#fff;padding:11px 16px;}
 .cmt-block-head .cmt-n{background:rgba(255,255,255,.2);width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;}
-.cmt-block-head b{font-size:15px;flex:1;min-width:140px;}
+.cmt-block-head b{font-size:15px;flex:1;min-width:140px;} .cmt-lbl{font-weight:500;opacity:.85;margin-inline-end:4px;}
 .cmt-block-head .cmt-cnt{font-size:12px;opacity:.85;}
 .cmt-wrap{overflow-x:auto;}
 .cmt-table{width:100%;border-collapse:collapse;font-size:13.5px;background:#fff;min-width:420px;}
@@ -1549,8 +1552,8 @@ function comTableHtml(info){
       const ms = comMembersOf(c.id); n++;
       const gc = g.k === 'أ' ? 'g-a' : (g.k === 'ب' ? 'g-b' : 'g-c');
       out += `<div class="cmt-block">
-        <div class="cmt-block-head"><span class="cmt-n">${n}</span><b>${escapeHtml(c.name)}</b><span class="cmt-grp ${gc}">${g.short}</span><span class="cmt-cnt">${ms.length} عضو</span></div>
-        <div class="cmt-wrap"><table class="cmt-table"><thead><tr><th>#</th><th>عضو هيئة التدريس</th><th>طبيعة العضوية</th><th>جودة المشاركة</th></tr></thead><tbody>
+        <div class="cmt-block-head"><b><span class="cmt-lbl">اسم اللجنة:</span> ${escapeHtml(c.name)}</b><span class="cmt-grp ${gc}">${g.short}</span><span class="cmt-cnt">${ms.length} عضو</span></div>
+        <div class="cmt-wrap"><table class="cmt-table"><thead><tr><th>#</th><th>أعضاء اللجنة</th><th>طبيعة العضوية</th><th>جودة المشاركة</th></tr></thead><tbody>
         ${ms.length ? ms.map((m, i) => `<tr><td class="cmt-idx">${i + 1}</td><td class="cmt-mem">${escapeHtml(m.member_name)}</td><td><span class="cmt-role ${roleCls(m.role)}">${escapeHtml(m.role)}</span></td><td>${q(m.participation)}</td></tr>`).join('') : '<tr><td colspan="4">—</td></tr>'}
         </tbody></table></div></div>`;
     });
