@@ -460,6 +460,12 @@
   .com-mctl{display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
   .com-mctl select{width:auto;min-width:150px;padding:9px 12px;}
   .com-add{margin:6px 0 4px;font-size:15px;padding:11px 20px;}
+  .com-add-big{display:block;width:100%;margin:10px 0 8px;padding:16px 20px;font-size:17px;font-weight:700;border:none;border-radius:10px;background:linear-gradient(135deg,#1C9E93,#12294F);color:#fff;cursor:pointer;box-shadow:0 4px 14px rgba(18,41,79,.25);}
+  .com-add-big:hover{filter:brightness(1.08);}
+  .com-pulse{animation:comPulse 1.8s ease-out infinite;}
+  @keyframes comPulse{0%{box-shadow:0 0 0 0 rgba(28,158,147,.75);}70%{box-shadow:0 0 0 14px rgba(28,158,147,0);}100%{box-shadow:0 0 0 0 rgba(28,158,147,0);}}
+  #circManageBtn{font-size:15.5px;padding:12px 24px;font-weight:700;}
+  @media (prefers-reduced-motion:reduce){.com-pulse{animation:none;}}
   .com-grp-opt{padding:14px 14px !important;}
   .com-addrow{display:flex;gap:8px;margin-top:8px;} .com-addrow select,.com-addrow input{flex:1;min-width:0;}
   .noabs-panel{margin-bottom:22px;}
@@ -1065,7 +1071,7 @@ function renderCircularPanel(){
       <p class="com-meta">صدر ${escapeHtml(comFmtDate(circ.issued_date))} · آخر موعد للإرسال: <b>${escapeHtml(comFmtDate(circ.deadline))}</b> · ${leftTxt}</p>
       <p class="com-meta">اللجان المضافة: <b>${info.coms.length}</b> · المُرسلة: <b>${info.sentComs.length}</b>${info.draftComs.length ? ` · بانتظار الإرسال: <b>${info.draftComs.length}</b>` : ''}${info.lastSent ? ' · آخر إرسال: ' + escapeHtml(comFmtTime(info.lastSent)) : ''}</p>
       <div class="com-actions">
-        <button class="btn-primary" id="circManageBtn">${info.coms.length ? '📋 لجان القسم / إضافة لجنة' : '➕ ابدأ حصر اللجان'}</button>
+        <button class="btn-primary com-pulse" id="circManageBtn">${info.coms.length ? '📋 لجان القسم / إضافة لجنة' : '➕ ابدأ حصر اللجان'}</button>
         ${fileBtn}
       </div>`;
     document.getElementById('circManageBtn').onclick = () => openCommitteesManager(deptId, false);
@@ -1208,7 +1214,7 @@ function openCommitteesManager(deptId, readOnly){
     <div class="modal modal-wide com-modal">
       <h3>📨 حصر اللجان — ${escapeHtml(dept ? dept.name : '')}</h3>
       <p class="com-meta">${comStatusChip(info)} · الموعد النهائي: ${escapeHtml(comFmtDate(circ.deadline))}</p>
-      ${locked ? '' : `<button class="btn-primary com-add" id="comAddBtn">➕ إضافة لجنة${info.coms.length ? ' أخرى' : ''}</button>
+      ${locked ? '' : `<button class="com-add-big com-pulse" id="comAddBtn">➕ إضافة لجنة جديدة</button>
       <p class="com-hint">لكل لجنة زر إرسال خاص بها. يمكنك إضافة أكثر من لجنة، من أي فئة وبلا حد (حتى من الفئة نفسها)، وإرسال كل لجنة حين تكتمل.</p>`}
       ${COM_GROUPS.map(g => {
         const list = info.coms.filter(c => c.grp === g.k);
@@ -1513,17 +1519,20 @@ ${COM_TBL_CSS}
 // ----- جدول حصر أعمال اللجان (عرض الإدارة + التقرير + الطباعة) -----
 const COM_REPORT_TITLE = 'حصر أعمال اللجان في الأقسام العلمية';
 const COM_TBL_CSS = `
-.cmt-wrap{overflow-x:auto;border:1px solid #D7D3C5;border-radius:8px;}
-.cmt-table{width:100%;border-collapse:collapse;font-size:13.5px;background:#fff;min-width:620px;}
-.cmt-table th{background:#12294F;color:#fff;padding:10px 12px;font-size:12.5px;font-weight:700;text-align:center;white-space:nowrap;}
+.cmt-block{border:1px solid #D7D3C5;border-radius:10px;overflow:hidden;margin-bottom:18px;background:#fff;break-inside:avoid;}
+.cmt-block-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#12294F;color:#fff;padding:11px 16px;}
+.cmt-block-head .cmt-n{background:rgba(255,255,255,.2);width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;}
+.cmt-block-head b{font-size:15px;flex:1;min-width:140px;}
+.cmt-block-head .cmt-cnt{font-size:12px;opacity:.85;}
+.cmt-wrap{overflow-x:auto;}
+.cmt-table{width:100%;border-collapse:collapse;font-size:13.5px;background:#fff;min-width:420px;}
+.cmt-table th{background:#EEEEE5;color:#12294F;padding:9px 12px;font-size:12.5px;font-weight:700;text-align:center;white-space:nowrap;border-bottom:2px solid #D7D3C5;}
 .cmt-table td{padding:9px 12px;border-bottom:1px solid #E4E0D2;text-align:center;vertical-align:middle;}
-.cmt-table tr.cmt-first td{border-top:2px solid #C9C5B4;}
-.cmt-table tr:first-child td{border-top:none;}
-.cmt-table td.cmt-name{font-weight:700;color:#12294F;text-align:right;background:#F7F7F1;}
+.cmt-table tr:last-child td{border-bottom:none;}
 .cmt-table td.cmt-mem{text-align:right;font-weight:600;}
-.cmt-table td.cmt-idx{background:#F7F7F1;color:#4A524E;font-weight:700;}
+.cmt-table td.cmt-idx{color:#4A524E;font-weight:700;width:44px;}
 .cmt-grp{display:inline-block;border-radius:6px;padding:2px 11px;font-size:12px;font-weight:700;color:#fff;white-space:nowrap;}
-.cmt-grp.g-a{background:#12294F;} .cmt-grp.g-b{background:#1C9E93;} .cmt-grp.g-c{background:#9C6B1E;}
+.cmt-grp.g-a{background:#1C9E93;} .cmt-grp.g-b{background:#2F6FB5;} .cmt-grp.g-c{background:#C9892B;}
 .cmt-role,.cmt-q{display:inline-block;border-radius:20px;padding:2px 12px;font-size:12px;font-weight:700;white-space:nowrap;}
 .cmt-role.r-head{background:#F1E7D3;color:#6F4710;} .cmt-role.r-sec{background:#DCE6F5;color:#12294F;} .cmt-role.r-mem{background:#EEEEE5;color:#4A524E;}
 .cmt-q.q-ok{background:#DEEAE2;color:#2D6A4C;} .cmt-q.q-no{background:#F7DCD8;color:#C0392B;} .cmt-q.q-na{color:#4A524E;}
@@ -1534,18 +1543,19 @@ function comTableHtml(info){
   if(!sent.length) return '<div class="cmt-empty">لا توجد لجان مُرسلة بعد.</div>';
   const roleCls = r => r === 'رئيس' ? 'r-head' : (r === 'أمين' ? 'r-sec' : 'r-mem');
   const q = v => v === 'فاعل' ? '<span class="cmt-q q-ok">فاعل</span>' : (v === 'غير فاعل' ? '<span class="cmt-q q-no">غير فاعل</span>' : '<span class="cmt-q q-na">—</span>');
-  let n = 0, rows = '';
+  let n = 0, out = '';
   COM_GROUPS.forEach(g => {
     sent.filter(c => c.grp === g.k).forEach(c => {
       const ms = comMembersOf(c.id); n++;
       const gc = g.k === 'أ' ? 'g-a' : (g.k === 'ب' ? 'g-b' : 'g-c');
-      if(!ms.length){ rows += `<tr class="cmt-first"><td class="cmt-idx">${n}</td><td class="cmt-name">${escapeHtml(c.name)}</td><td><span class="cmt-grp ${gc}">${g.short}</span></td><td colspan="3">—</td></tr>`; return; }
-      ms.forEach((m, i) => {
-        rows += `<tr class="${i === 0 ? 'cmt-first' : ''}">${i === 0 ? `<td class="cmt-idx" rowspan="${ms.length}">${n}</td><td class="cmt-name" rowspan="${ms.length}">${escapeHtml(c.name)}</td><td rowspan="${ms.length}"><span class="cmt-grp ${gc}">${g.short}</span></td>` : ''}<td class="cmt-mem">${escapeHtml(m.member_name)}</td><td><span class="cmt-role ${roleCls(m.role)}">${escapeHtml(m.role)}</span></td><td>${q(m.participation)}</td></tr>`;
-      });
+      out += `<div class="cmt-block">
+        <div class="cmt-block-head"><span class="cmt-n">${n}</span><b>${escapeHtml(c.name)}</b><span class="cmt-grp ${gc}">${g.short}</span><span class="cmt-cnt">${ms.length} عضو</span></div>
+        <div class="cmt-wrap"><table class="cmt-table"><thead><tr><th>#</th><th>عضو هيئة التدريس</th><th>طبيعة العضوية</th><th>جودة المشاركة</th></tr></thead><tbody>
+        ${ms.length ? ms.map((m, i) => `<tr><td class="cmt-idx">${i + 1}</td><td class="cmt-mem">${escapeHtml(m.member_name)}</td><td><span class="cmt-role ${roleCls(m.role)}">${escapeHtml(m.role)}</span></td><td>${q(m.participation)}</td></tr>`).join('') : '<tr><td colspan="4">—</td></tr>'}
+        </tbody></table></div></div>`;
     });
   });
-  return `<div class="cmt-wrap"><table class="cmt-table"><thead><tr><th style="width:44px">#</th><th>اسم اللجنة</th><th>فئة اللجنة</th><th>عضو هيئة التدريس</th><th>طبيعة العضوية</th><th>جودة المشاركة</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  return out;
 }
 
 function printDeptCommittees(deptId){
