@@ -429,7 +429,7 @@
   .com-card-head{display:flex;justify-content:space-between;align-items:center;gap:8px;}
   .com-mlist{list-style:none;margin:8px 0 0;padding:0;font-size:13.5px;}
   .com-mlist li{display:flex;gap:10px;align-items:center;padding:3px 0;flex-wrap:wrap;} .com-mlist li>span:first-child{flex:1;min-width:140px;}
-  .com-role{background:var(--paper);border-radius:12px;padding:1px 10px;font-size:12px;font-weight:600;} .com-role.is-head{background:var(--amber-tint);color:#6F4710;}
+  .com-role{background:var(--paper);border-radius:12px;padding:1px 10px;font-size:12px;font-weight:600;} .com-role.is-head{background:var(--amber-tint);color:#6F4710;} .com-role.is-sec{background:#DCE6F5;color:var(--seal-dark);}
   .com-ok{color:var(--green);font-size:12px;} .com-no{color:var(--redd);font-size:12px;font-weight:700;}
   .com-empty{color:var(--ink-soft);font-size:13px;margin:6px 0;} .com-warn{color:#8A5A12;font-size:12.5px;margin:6px 0 0;}
   .com-add{margin-top:12px;}
@@ -993,6 +993,8 @@ function comEnabled(){
   try { if(new URLSearchParams(location.search).get('committees') === '1') return true; } catch(e){}
   return SHOW_COMMITTEES;
 }
+const COM_ROLES = ['رئيس','عضو','أمين'];
+const COM_QUALITY = ['فاعل','غير فاعل'];
 const COM_GROUPS = [
   { k:'أ', short:'رئيسية (أ)', label:'المجموعة (أ): اللجان الرئيسية' },
   { k:'ب', short:'فرعية (ب)', label:'المجموعة (ب): اللجان الفرعية' },
@@ -1163,7 +1165,7 @@ function openCommitteesManager(deptId, readOnly){
         <b>${escapeHtml(c.name)}</b>
         ${locked ? '' : `<span><button class="btn-text" data-edit="${c.id}">تعديل</button> <button class="btn-text com-reopen" data-del="${c.id}">حذف</button></span>`}
       </div>
-      ${ms.length ? `<ul class="com-mlist">${ms.map(m => `<li><span>${escapeHtml(m.member_name)}</span><span class="com-role ${m.role === 'رئيس' ? 'is-head' : ''}">${escapeHtml(m.role)}</span>${m.confirmed ? '<span class="com-ok">✔ مؤكَّد</span>' : '<span class="com-no">غير مؤكَّد</span>'}</li>`).join('')}</ul>` : '<p class="com-empty">لا يوجد أعضاء.</p>'}
+      ${ms.length ? `<ul class="com-mlist">${ms.map(m => `<li><span>${escapeHtml(m.member_name)}</span><span class="com-role ${m.role === 'رئيس' ? 'is-head' : (m.role === 'أمين' ? 'is-sec' : '')}">${escapeHtml(m.role)}</span>${m.participation === 'فاعل' ? '<span class="com-ok">● فاعل</span>' : (m.participation === 'غير فاعل' ? '<span class="com-no">● غير فاعل</span>' : '<span class="com-no">لم تُحدَّد الجودة</span>')}</li>`).join('')}</ul>` : '<p class="com-empty">لا يوجد أعضاء.</p>'}
       ${ms.length && !hasHead ? '<p class="com-warn">⚠️ لم يُحدَّد رئيس لهذه اللجنة.</p>' : ''}
     </div>`;
   };
@@ -1209,7 +1211,7 @@ function openCommitteesManager(deptId, readOnly){
       if(!ms.length) errs.push(`لجنة «${c.name}»: لا يوجد أعضاء.`);
       ms.forEach(m => {
         if(!m.role) errs.push(`لجنة «${c.name}»: حدّد نوع عضوية «${m.member_name}».`);
-        if(!m.confirmed) errs.push(`لجنة «${c.name}»: لم تُؤكَّد مشاركة «${m.member_name}».`);
+        if(!m.participation) errs.push(`لجنة «${c.name}»: حدّد جودة مشاركة «${m.member_name}» (فاعل / غير فاعل).`);
       });
     });
     if(errs.length){
@@ -1238,7 +1240,7 @@ function openCommitteesManager(deptId, readOnly){
 function openCommitteeForm(deptId, committeeId){
   const circ = comCircular();
   const existing = committeeId ? state.committees.find(c => c.id === committeeId) : null;
-  let members = existing ? comMembersOf(existing.id).map(m => ({ name: m.member_name, role: m.role || '', confirmed: !!m.confirmed, manual: !!m.is_manual })) : [];
+  let members = existing ? comMembersOf(existing.id).map(m => ({ name: m.member_name, role: m.role || '', quality: m.participation || '', manual: !!m.is_manual })) : [];
   let nameVal = existing ? existing.name : '';
   let grpVal = existing ? existing.grp : '';
   const facultyNames = facultyNamesForDept(deptId);
@@ -1268,7 +1270,7 @@ function openCommitteeForm(deptId, committeeId){
 
         <div class="com-step">
           <div class="com-step-title"><span>3</span> أعضاء هيئة التدريس في اللجنة <em>(${members.length})</em></div>
-          <p class="com-hint" style="margin-top:0">اختر العضو من أعضاء القسم أو اكتب اسمه يدويًا، ثم حدّد نوع عضويته (رئيس / عضو) وعلّم «تأكيد المشاركة».</p>
+          <p class="com-hint" style="margin-top:0">اختر العضو من أعضاء القسم أو اكتب اسمه يدويًا، ثم حدّد طبيعة عضويته (رئيس / عضو / أمين) وجودة مشاركته (فاعل / غير فاعل).</p>
           <div class="com-addbox">
             <div class="com-addrow">
               <select id="cfPick" class="com-input"><option value="">اختر عضوًا من أعضاء القسم…</option>${avail.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('')}</select>
@@ -1283,8 +1285,8 @@ function openCommitteeForm(deptId, committeeId){
             <div class="com-mrow">
               <div class="com-mname">${escapeHtml(m.name)}${m.manual ? ' <small>(اسم يدوي)</small>' : ''}</div>
               <div class="com-mctl">
-                <select class="cf-role com-input" data-i="${i}"><option value="">نوع العضوية…</option><option value="رئيس" ${m.role === 'رئيس' ? 'selected' : ''}>رئيس</option><option value="عضو" ${m.role === 'عضو' ? 'selected' : ''}>عضو</option></select>
-                <label class="com-conf"><input type="checkbox" class="cf-conf" data-i="${i}" ${m.confirmed ? 'checked' : ''}> تأكيد المشاركة</label>
+                <select class="cf-role com-input" data-i="${i}"><option value="">طبيعة العضوية…</option>${COM_ROLES.map(r => `<option value="${r}" ${m.role === r ? 'selected' : ''}>${r}</option>`).join('')}</select>
+                <select class="cf-qual com-input" data-i="${i}"><option value="">جودة المشاركة…</option>${COM_QUALITY.map(q => `<option value="${q}" ${m.quality === q ? 'selected' : ''}>${q}</option>`).join('')}</select>
                 <button class="com-del" data-i="${i}" title="إزالة العضو" type="button">✕</button>
               </div>
             </div>`).join('') : '<p class="com-empty">لم تُضف أعضاء بعد.</p>'}
@@ -1299,18 +1301,18 @@ function openCommitteeForm(deptId, committeeId){
     document.getElementById('cfName').oninput = sync;
     overlay.querySelectorAll('input[name=cfGrpR]').forEach(r => r.onchange = () => { sync(); overlay.querySelectorAll('.com-grp-opt').forEach(l => l.classList.toggle('is-on', l.contains(r) && r.checked)); });
     overlay.querySelectorAll('.cf-role').forEach(s => s.onchange = () => { members[Number(s.dataset.i)].role = s.value; });
-    overlay.querySelectorAll('.cf-conf').forEach(c => c.onchange = () => { members[Number(c.dataset.i)].confirmed = c.checked; });
+    overlay.querySelectorAll('.cf-qual').forEach(q => q.onchange = () => { members[Number(q.dataset.i)].quality = q.value; });
     overlay.querySelectorAll('.com-del').forEach(b => b.onclick = () => { sync(); members.splice(Number(b.dataset.i), 1); errMsg = ''; draw(); });
     document.getElementById('cfPickAdd').onclick = () => {
       sync(); const v = document.getElementById('cfPick').value;
-      if(!v) return; members.push({ name: v, role: '', confirmed: false, manual: false }); errMsg = ''; draw();
+      if(!v) return; members.push({ name: v, role: '', quality: '', manual: false }); errMsg = ''; draw();
     };
     const addManual = () => {
       sync(); const v = document.getElementById('cfManual').value.trim().replace(/\s+/g, ' ');
       if(!v) return;
       if(used(v)){ errMsg = 'هذا الاسم مضاف بالفعل في اللجنة.'; draw(); return; }
       const inList = facultyNames.some(n => normFacultyName(n) === normFacultyName(v));
-      members.push({ name: v, role: '', confirmed: false, manual: !inList }); errMsg = ''; draw();
+      members.push({ name: v, role: '', quality: '', manual: !inList }); errMsg = ''; draw();
     };
     document.getElementById('cfManualAdd').onclick = addManual;
     document.getElementById('cfManual').onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); addManual(); } };
@@ -1322,7 +1324,9 @@ function openCommitteeForm(deptId, committeeId){
       if(!grpVal){ errMsg = 'اختر نوع اللجنة: رئيسية (أ) أو فرعية (ب) أو صغيرة (ج).'; draw(); return; }
       if(!members.length){ errMsg = 'أضف عضوًا واحدًا على الأقل.'; draw(); return; }
       const noRole = members.find(m => !m.role);
-      if(noRole){ errMsg = `حدّد نوع العضوية (رئيس / عضو) لـ «${noRole.name}».`; draw(); return; }
+      if(noRole){ errMsg = `حدّد طبيعة العضوية (رئيس / عضو / أمين) لـ «${noRole.name}».`; draw(); return; }
+      const noQual = members.find(m => !m.quality);
+      if(noQual){ errMsg = `حدّد جودة المشاركة (فاعل / غير فاعل) لـ «${noQual.name}».`; draw(); return; }
       const dup = comDeptCommittees(circ.id, deptId).find(c => normText(c.name) === normText(name) && (!existing || c.id !== existing.id));
       if(dup){ errMsg = 'توجد لجنة بنفس الاسم في القسم.'; draw(); return; }
       const btn = document.getElementById('cfSave'); btn.disabled = true; btn.textContent = 'جارٍ الحفظ...';
@@ -1338,7 +1342,7 @@ function openCommitteeForm(deptId, committeeId){
         if(error || !data){ errMsg = 'تعذّر الحفظ، حاول مرة أخرى.'; draw(); return; }
         cid = data.id;
       }
-      const { error: mErr } = await sb.from('committee_members').insert(members.map(m => ({ committee_id: cid, member_name: m.name, role: m.role, confirmed: !!m.confirmed, is_manual: !!m.manual })));
+      const { error: mErr } = await sb.from('committee_members').insert(members.map(m => ({ committee_id: cid, member_name: m.name, role: m.role, participation: m.quality, confirmed: true, is_manual: !!m.manual })));
       if(mErr){ errMsg = 'حُفظت اللجنة لكن تعذّر حفظ الأعضاء، افتحها وأعد المحاولة.'; await loadAll(); draw(); return; }
       await comMarkModified(deptId);
       await loadAll();
@@ -1356,36 +1360,49 @@ function generateCommitteesReport(){
   const allComs = rows.flatMap(r => r.info.coms);
   const grpCount = k => allComs.filter(c => c.grp === k).length;
   const nSent = rows.filter(r => r.info.status === 'sent').length;
+  const allMembers = [];
+  rows.forEach(r => r.info.coms.forEach(c => comMembersOf(c.id).forEach(m => allMembers.push({ m, c, d: r.d }))));
+  const nActive = allMembers.filter(x => x.m.participation === 'فاعل').length;
+  const nInactive = allMembers.filter(x => x.m.participation === 'غير فاعل').length;
+  const nUnrated = allMembers.length - nActive - nInactive;
 
   // حمل الأعضاء: عدد اللجان لكل عضو
   const load = new Map();
-  rows.forEach(r => r.info.coms.forEach(c => comMembersOf(c.id).forEach(m => {
-    const key = normFacultyName(m.member_name) + '|' + r.d.id;
-    if(!load.has(key)) load.set(key, { name: m.member_name, dept: r.d.name, n: 0, head: 0, a: 0, b: 0, g: 0, sent: r.info.status === 'sent', list: [] });
-    const o = load.get(key); o.n++; if(m.role === 'رئيس') o.head++;
-    if(c.grp === 'أ') o.a++; else if(c.grp === 'ب') o.b++; else o.g++;
-    o.list.push(c.name + ' (' + m.role + ')');
-  })));
+  allMembers.forEach(({ m, c, d }) => {
+    const key = normFacultyName(m.member_name) + '|' + d.id;
+    if(!load.has(key)) load.set(key, { name: m.member_name, dept: d.name, n: 0, head: 0, sec: 0, mem: 0, act: 0, inact: 0 });
+    const o = load.get(key); o.n++;
+    if(m.role === 'رئيس') o.head++; else if(m.role === 'أمين') o.sec++; else o.mem++;
+    if(m.participation === 'فاعل') o.act++; else if(m.participation === 'غير فاعل') o.inact++;
+  });
   const people = [...load.values()].sort((x, y) => y.n - x.n || x.name.localeCompare(y.name, 'ar'));
-  const unconfirmed = [];
-  rows.forEach(r => r.info.coms.forEach(c => comMembersOf(c.id).forEach(m => { if(!m.confirmed) unconfirmed.push({ dept: r.d.name, com: c.name, name: m.member_name }); })));
+  const inactiveList = allMembers.filter(x => x.m.participation === 'غير فاعل');
+  const pct = n => allMembers.length ? Math.round(n * 1000 / allMembers.length) / 10 : 0;
+  const roleCls = r => r === 'رئيس' ? 'r-head' : (r === 'أمين' ? 'r-sec' : 'r-mem');
+  const qualCell = q => q === 'فاعل' ? '<span class="q q-ok">فاعل</span>' : (q === 'غير فاعل' ? '<span class="q q-no">غير فاعل</span>' : '<span class="q q-na">—</span>');
+  const grpMax = Math.max(1, grpCount('أ'), grpCount('ب'), grpCount('ج'));
 
   const deptBlocks = rows.map(r => {
     const body = COM_GROUPS.map(g => {
       const list = r.info.coms.filter(c => c.grp === g.k);
       if(!list.length) return '';
-      return `<div class="grp-title">${g.label} <span>(${list.length})</span></div>
-        <table><thead><tr><th style="width:36px">#</th><th style="width:30%">اللجنة</th><th>الأعضاء ونوع العضوية</th></tr></thead><tbody>
-        ${list.map((c, i) => `<tr><td>${i + 1}</td><td style="text-align:right;font-weight:700">${escapeHtml(c.name)}</td><td style="text-align:right">${comMembersOf(c.id).map(m => `<span class="mem ${m.role === 'رئيس' ? 'head' : ''}">${escapeHtml(m.member_name)} <i>${escapeHtml(m.role)}</i>${m.confirmed ? '' : ' ⚠️'}</span>`).join('')}</td></tr>`).join('')}
-        </tbody></table>`;
+      return `<div class="grp-title"><span class="grp-badge g-${g.k === 'أ' ? 'a' : (g.k === 'ب' ? 'b' : 'c')}">${g.short}</span> ${g.label.split(': ')[1].replace(/\.$/, '')} <small>(${list.length})</small></div>
+        ${list.map(c => {
+          const ms = comMembersOf(c.id);
+          return `<div class="com-box"><div class="com-box-head"><b>${escapeHtml(c.name)}</b><span>${ms.length} عضو</span></div>
+          <table><thead><tr><th style="width:36px">#</th><th>العضو</th><th style="width:120px">طبيعة العضوية</th><th style="width:120px">جودة المشاركة</th></tr></thead><tbody>
+          ${ms.map((m, i) => `<tr><td>${i + 1}</td><td style="text-align:right;font-weight:600">${escapeHtml(m.member_name)}</td><td><span class="role ${roleCls(m.role)}">${escapeHtml(m.role)}</span></td><td>${qualCell(m.participation)}</td></tr>`).join('')}
+          </tbody></table></div>`;
+        }).join('')}`;
     }).join('');
-    const tag = r.info.status === 'sent' ? '<span class="tag tag-ok">أُرسلت</span>' : (r.info.status === 'modified' ? '<span class="tag tag-warn">عُدّلت بعد الإرسال</span>' : r.info.status === 'draft' ? '<span class="tag tag-warn">غير معتمدة بعد</span>' : '<span class="tag tag-warn">لم تُرسل</span>');
+    const tag = r.info.status === 'sent' ? '<span class="tag tag-ok">أُرسلت</span>' : (r.info.status === 'modified' ? '<span class="tag tag-warn">عُدّلت بعد الإرسال</span>' : (r.info.status === 'draft' ? '<span class="tag tag-warn">غير معتمدة بعد</span>' : '<span class="tag tag-warn">لم تُرسل</span>'));
     return `<details class="dept-block" open><summary class="dept-block-head"><span>${escapeHtml(r.d.name)} ${tag}</span><span class="dept-block-count">${r.info.coms.length} لجنة · ${r.info.memCount} عضوية</span></summary>
       <div class="dept-body">${body || '<div class="empty-note">لم تُضف لجان بعد.</div>'}</div></details>`;
   }).join('');
 
   const html = `<!DOCTYPE html>
 <html lang="ar" dir="rtl"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>تقرير حصر اللجان — ${escapeHtml(circ.subject || circ.title)}</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@500;700;900&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1398,25 +1415,58 @@ h1,h2{font-family:'Noto Kufi Arabic',sans-serif;margin:0;}
 .report-header img{height:64px;} .report-header h1{font-size:23px;color:var(--seal-dark);} .report-sub{color:var(--ink-soft);font-size:13px;margin-top:6px;}
 .summary-strip{display:flex;gap:12px;margin-bottom:26px;flex-wrap:wrap;}
 .summary-box{flex:1 1 120px;border-radius:8px;padding:14px;text-align:center;background:var(--teal-tint);border:1px solid #BFE3DF;}
+.summary-box.good{background:var(--green-tint);border-color:#BFDECB;} .summary-box.bad{background:var(--redd-tint);border-color:#EFC9C2;}
 .summary-box .num{font-family:'Noto Kufi Arabic',sans-serif;font-size:30px;font-weight:900;color:var(--seal-dark);} .summary-box .lbl{font-size:12px;color:var(--ink-soft);font-weight:600;}
-h2{font-size:17px;color:var(--seal-dark);margin:28px 0 12px;}
+h2{font-size:17px;color:var(--seal-dark);margin:30px 0 12px;}
+.chart-card{border:1px solid var(--line);border-radius:8px;padding:16px 18px;background:#fff;margin-bottom:8px;}
+.bar-row{display:flex;align-items:center;gap:12px;margin:9px 0;} .bar-name{flex:0 0 120px;font-size:13.5px;font-weight:700;color:var(--seal-dark);}
+.bar-track{flex:1;height:22px;background:#EDEBE1;border-radius:11px;overflow:hidden;display:flex;}
+.bar-fill{height:100%;background:linear-gradient(90deg,var(--teal),var(--seal-dark));border-radius:11px;transform-origin:right center;animation:growloop 10s cubic-bezier(.2,.7,.2,1) infinite;position:relative;overflow:hidden;}
+.bar-fill::after{content:'';position:absolute;top:0;bottom:0;right:0;width:38%;background:linear-gradient(100deg,transparent 0%,rgba(255,255,255,.65) 50%,transparent 100%);transform:translateX(110%) skewX(-18deg);animation:waveloop 2.2s linear infinite;}
+.bar-val{flex:0 0 40px;text-align:left;font-family:'Noto Kufi Arabic',sans-serif;font-weight:700;font-size:14px;color:var(--seal-dark);}
+.ratio-bar{display:flex;height:26px;border-radius:13px;overflow:hidden;background:#EDEBE1;}
+.ratio-seg{height:100%;transform-origin:right center;animation:growloop 10s cubic-bezier(.2,.7,.2,1) infinite;}
+.ratio-ok{background:var(--green);} .ratio-no{background:var(--redd);} .ratio-wait{background:var(--amber);}
+.ratio-legend{display:flex;flex-wrap:wrap;gap:16px;margin-top:10px;font-size:13px;color:var(--ink-soft);font-weight:600;}
+.ratio-legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-inline-end:6px;vertical-align:-1px;}
+@keyframes waveloop{0%{transform:translateX(110%) skewX(-18deg);}55%,100%{transform:translateX(-280%) skewX(-18deg);}}
+@keyframes rise{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:none;}}
+@keyframes growloop{0%{transform:scaleX(0);}12%{transform:scaleX(1);}100%{transform:scaleX(1);}}
+@property --num{syntax:'<integer>';inherits:false;initial-value:0;}
+@keyframes countloop{0%{--num:0;}12%{--num:var(--to);}100%{--num:var(--to);}}
+.cnt{--num:var(--to);counter-reset:cn var(--num);font-size:0;animation:countloop 10s linear infinite;}
+.summary-box .num.cnt,.bar-row .bar-val.cnt{font-size:0;}
+.num.cnt::after{content:counter(cn);font-size:30px;} .bar-val.cnt::after{content:counter(cn);font-size:14px;}
+.sheet{animation:rise .6s ease both;} .summary-box{animation:rise .6s ease both;}
+.summary-box:nth-child(2){animation-delay:.06s;} .summary-box:nth-child(3){animation-delay:.12s;} .summary-box:nth-child(4){animation-delay:.18s;} .summary-box:nth-child(5){animation-delay:.24s;} .summary-box:nth-child(6){animation-delay:.3s;}
+.tools{display:flex;gap:8px;margin:0 0 16px;} .tools button{background:#fff;color:var(--seal-dark);border:1.5px solid var(--seal-dark);border-radius:6px;padding:7px 16px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;} .tools button:hover{background:var(--teal-tint);}
 .dept-block{border:1px solid var(--line);border-radius:8px;margin-bottom:14px;overflow:hidden;}
-.dept-block-head{display:flex;justify-content:space-between;align-items:center;padding:12px 18px;background:var(--seal-dark);color:#fff;font-family:'Noto Kufi Arabic',sans-serif;font-weight:700;font-size:15px;cursor:pointer;gap:10px;}
-.dept-block-count{background:rgba(255,255,255,.18);padding:2px 12px;border-radius:20px;font-size:12.5px;font-family:'IBM Plex Sans Arabic',sans-serif;font-weight:500;}
-.dept-body{padding:6px 14px 14px;} .grp-title{font-weight:700;color:var(--seal-dark);margin:14px 0 6px;font-size:14px;} .grp-title span{color:var(--ink-soft);font-weight:500;}
+.dept-block-head{display:flex;justify-content:space-between;align-items:center;padding:12px 18px;background:var(--seal-dark);color:#fff;font-family:'Noto Kufi Arabic',sans-serif;font-weight:700;font-size:15px;cursor:pointer;gap:10px;list-style:none;}
+.dept-block-head::-webkit-details-marker{display:none;}
+.dept-block-head::after{content:'▾';display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:#0B5F57;color:#fff;font-size:16px;flex:0 0 auto;animation:arrowpulse 1.6s ease-out infinite;}
+.dept-block[open] .dept-block-head::after{transform:rotate(180deg);}
+@keyframes arrowpulse{0%{box-shadow:0 0 0 0 rgba(28,158,147,.85);}60%{box-shadow:0 0 0 13px rgba(28,158,147,0);}100%{box-shadow:0 0 0 0 rgba(28,158,147,0);}}
+.dept-block-count{background:rgba(255,255,255,.18);padding:2px 12px;border-radius:20px;font-size:12.5px;font-family:'IBM Plex Sans Arabic',sans-serif;font-weight:500;margin-inline-start:auto;}
+.dept-body{padding:8px 16px 16px;}
+.grp-title{font-weight:700;color:var(--seal-dark);margin:18px 0 8px;font-size:14px;display:flex;align-items:center;gap:8px;} .grp-title small{color:var(--ink-soft);font-weight:500;}
+.grp-badge{display:inline-block;border-radius:6px;padding:1px 10px;font-size:12.5px;color:#fff;} .g-a{background:var(--seal-dark);} .g-b{background:var(--teal);} .g-c{background:var(--amber);}
+.com-box{border:1px solid var(--line);border-radius:8px;margin-bottom:12px;overflow:hidden;break-inside:avoid;}
+.com-box-head{display:flex;justify-content:space-between;align-items:center;background:var(--paper);padding:9px 14px;font-size:14px;color:var(--seal-dark);} .com-box-head span{font-size:12px;color:var(--ink-soft);}
 table{width:100%;border-collapse:collapse;font-size:13.5px;}
-th{background:var(--paper);color:var(--seal-dark);padding:9px 10px;font-size:12px;border-bottom:2px solid var(--line);}
-td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:middle;text-align:center;} tr:last-child td{border-bottom:none;}
-.mem{display:inline-block;background:var(--paper);border-radius:14px;padding:2px 11px;margin:2px 0 2px 5px;font-size:12.5px;} .mem i{font-style:normal;color:var(--ink-soft);font-size:11.5px;margin-right:4px;}
-.mem.head{background:var(--amber-tint);color:#6F4710;font-weight:700;} .mem.head i{color:#6F4710;}
-.tag{display:inline-block;padding:2px 11px;border-radius:20px;font-size:11.5px;font-weight:700;margin-right:8px;font-family:'IBM Plex Sans Arabic',sans-serif;} .tag-ok{background:var(--green-tint);color:var(--green);} .tag-warn{background:var(--redd-tint);color:var(--redd);}
+th{background:#F6F5EE;color:var(--seal-dark);padding:8px 10px;font-size:12px;border-bottom:2px solid var(--line);}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle;text-align:center;} tr:last-child td{border-bottom:none;}
+.role,.q{display:inline-block;border-radius:20px;padding:2px 12px;font-size:12px;font-weight:700;white-space:nowrap;}
+.r-head{background:var(--amber-tint);color:#6F4710;} .r-sec{background:#DCE6F5;color:var(--seal-dark);} .r-mem{background:var(--paper);color:var(--ink-soft);}
+.q-ok{background:var(--green-tint);color:var(--green);} .q-no{background:var(--redd-tint);color:var(--redd);} .q-na{color:var(--ink-soft);}
+.tag{display:inline-block;padding:2px 11px;border-radius:20px;font-size:11.5px;font-weight:700;margin-inline-start:8px;font-family:'IBM Plex Sans Arabic',sans-serif;} .tag-ok{background:var(--green-tint);color:var(--green);} .tag-warn{background:var(--redd-tint);color:var(--redd);}
 .empty-note{color:var(--ink-soft);text-align:center;padding:22px;background:var(--paper);border-radius:6px;margin-top:10px;}
 .note{font-size:12.5px;color:var(--ink-soft);margin:-6px 0 10px;}
 .report-footer{margin-top:30px;padding-top:14px;border-top:2px solid var(--line);font-size:12px;color:var(--ink-soft);display:flex;justify-content:space-between;}
-.print-bar{max-width:920px;margin:0 auto 16px;text-align:left;display:flex;gap:10px;justify-content:flex-end;}
+.print-bar{max-width:920px;margin:0 auto 16px;display:flex;gap:10px;justify-content:flex-end;}
 .print-bar button{background:var(--seal-dark);color:#fff;border:none;padding:11px 20px;border-radius:6px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;} .print-bar .btn-alt{background:var(--teal);}
-@media print{html{background:#fff;} *{-webkit-print-color-adjust:exact;print-color-adjust:exact;} .print-bar{display:none;} body{padding:0;} .sheet{box-shadow:none;border-radius:0;max-width:none;} .dept-block{break-inside:avoid-page;}}
-@media (max-width:600px){.sheet{padding:22px 16px;} .report-header{flex-direction:column-reverse;align-items:flex-start;gap:10px;}}
+@media (max-width:600px){.sheet{padding:22px 16px;} .report-header{flex-direction:column-reverse;align-items:flex-start;gap:10px;} .bar-name{flex-basis:84px;font-size:12.5px;}.summary-box{flex:1 1 40%;}}
+@media (prefers-reduced-motion:reduce){*{animation:none !important;}}
+@media print{html{background:#fff;} *{animation:none !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;} .print-bar,.tools{display:none;} body{padding:0;} .sheet{box-shadow:none;border-radius:0;max-width:none;}}
 </style></head><body>
 <div class="print-bar">
   <button onclick="window.print()">🖨 طباعة / حفظ PDF</button>
@@ -1425,21 +1475,39 @@ td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:middle;te
 <div class="sheet">
   <div class="report-header"><div><h1>تقرير حصر اللجان وأعضاء هيئة التدريس</h1><div class="report-sub">كلية الشريعة — جامعة القصيم · حتى ${escapeHtml(new Date().toLocaleDateString('ar-SA-u-ca-gregory'))}</div></div><img src="${LOGO_DATA_URI}" alt="شعار الكلية"></div>
   <div class="summary-strip">
-    <div class="summary-box"><div class="num">${nSent}/${rows.length}</div><div class="lbl">أقسام أرسلت قوائمها</div></div>
-    <div class="summary-box"><div class="num">${allComs.length}</div><div class="lbl">إجمالي اللجان</div></div>
-    <div class="summary-box"><div class="num">${grpCount('أ')}</div><div class="lbl">رئيسية (أ)</div></div>
-    <div class="summary-box"><div class="num">${grpCount('ب')}</div><div class="lbl">فرعية (ب)</div></div>
-    <div class="summary-box"><div class="num">${grpCount('ج')}</div><div class="lbl">صغيرة (ج)</div></div>
-    <div class="summary-box"><div class="num">${people.length}</div><div class="lbl">أعضاء مشاركون</div></div>
+    <div class="summary-box"><div class="num cnt" style="--to:${nSent}">${nSent}</div><div class="lbl">أقسام أرسلت (من ${rows.length})</div></div>
+    <div class="summary-box"><div class="num cnt" style="--to:${allComs.length}">${allComs.length}</div><div class="lbl">إجمالي اللجان</div></div>
+    <div class="summary-box"><div class="num cnt" style="--to:${people.length}">${people.length}</div><div class="lbl">أعضاء مشاركون</div></div>
+    <div class="summary-box"><div class="num cnt" style="--to:${allMembers.length}">${allMembers.length}</div><div class="lbl">إجمالي العضويات</div></div>
+    <div class="summary-box good"><div class="num cnt" style="--to:${nActive}">${nActive}</div><div class="lbl">مشاركة فاعلة</div></div>
+    <div class="summary-box ${nInactive ? 'bad' : 'good'}"><div class="num cnt" style="--to:${nInactive}">${nInactive}</div><div class="lbl">مشاركة غير فاعلة</div></div>
   </div>
+
+  <h2>توزيع اللجان حسب الفئة</h2>
+  <div class="chart-card">
+    ${COM_GROUPS.map(g => { const n = grpCount(g.k); return `<div class="bar-row"><div class="bar-name">${g.short}</div><div class="bar-track"><div class="bar-fill" style="width:${Math.round(n * 100 / grpMax)}%"></div></div><div class="bar-val cnt" style="--to:${n}">${n}</div></div>`; }).join('')}
+  </div>
+
+  <h2>جودة المشاركة</h2>
+  <div class="chart-card">
+    <div class="ratio-bar">
+      <div class="ratio-seg ratio-ok" style="width:${pct(nActive)}%"></div>
+      <div class="ratio-seg ratio-no" style="width:${pct(nInactive)}%"></div>
+      <div class="ratio-seg ratio-wait" style="width:${pct(nUnrated)}%"></div>
+    </div>
+    <div class="ratio-legend"><span><i style="background:var(--green)"></i>فاعل: ${nActive} (${pct(nActive)}%)</span><span><i style="background:var(--redd)"></i>غير فاعل: ${nInactive} (${pct(nInactive)}%)</span>${nUnrated ? `<span><i style="background:var(--amber)"></i>غير مُقيَّم: ${nUnrated}</span>` : ''}</div>
+  </div>
+
   <h2>اللجان حسب الأقسام</h2>
+  <div class="tools"><button onclick="document.querySelectorAll('details').forEach(function(d){d.open=true})">توسيع الكل</button><button onclick="document.querySelectorAll('details').forEach(function(d){d.open=false})">طي الكل</button></div>
   ${deptBlocks}
+
   <h2>مشاركة الأعضاء في اللجان</h2>
   <p class="note">مرتبة تنازليًا بعدد اللجان التي يشارك فيها العضو، لتبيّن توزيع الأعباء.</p>
-  ${people.length ? `<table><thead><tr><th>#</th><th>العضو</th><th>القسم</th><th>إجمالي اللجان</th><th>رئاسة</th><th>أ</th><th>ب</th><th>ج</th></tr></thead><tbody>
-  ${people.map((p, i) => `<tr><td>${i + 1}</td><td style="text-align:right;font-weight:700">${escapeHtml(p.name)}</td><td>${escapeHtml(p.dept)}</td><td><b>${p.n}</b></td><td>${p.head || '—'}</td><td>${p.a || '—'}</td><td>${p.b || '—'}</td><td>${p.g || '—'}</td></tr>`).join('')}
+  ${people.length ? `<table><thead><tr><th>#</th><th>العضو</th><th>القسم</th><th>إجمالي اللجان</th><th>رئيس</th><th>أمين</th><th>عضو</th><th>فاعل</th><th>غير فاعل</th></tr></thead><tbody>
+  ${people.map((p, i) => `<tr><td>${i + 1}</td><td style="text-align:right;font-weight:700">${escapeHtml(p.name)}</td><td>${escapeHtml(p.dept)}</td><td><b>${p.n}</b></td><td>${p.head || '—'}</td><td>${p.sec || '—'}</td><td>${p.mem || '—'}</td><td>${p.act || '—'}</td><td>${p.inact || '—'}</td></tr>`).join('')}
   </tbody></table>` : '<div class="empty-note">لا توجد بيانات بعد.</div>'}
-  ${unconfirmed.length ? `<h2>مشاركات لم تُؤكَّد بعد (${unconfirmed.length})</h2><table><thead><tr><th>القسم</th><th>اللجنة</th><th>العضو</th></tr></thead><tbody>${unconfirmed.map(u => `<tr><td>${escapeHtml(u.dept)}</td><td>${escapeHtml(u.com)}</td><td>${escapeHtml(u.name)}</td></tr>`).join('')}</tbody></table>` : ''}
+  ${inactiveList.length ? `<h2>مشاركات غير فاعلة (${inactiveList.length})</h2><table><thead><tr><th>القسم</th><th>اللجنة</th><th>العضو</th><th>طبيعة العضوية</th></tr></thead><tbody>${inactiveList.map(u => `<tr><td>${escapeHtml(u.d.name)}</td><td>${escapeHtml(u.c.name)}</td><td>${escapeHtml(u.m.member_name)}</td><td>${escapeHtml(u.m.role)}</td></tr>`).join('')}</tbody></table>` : ''}
   <div class="report-footer"><span>أُعدّ بواسطة: ${escapeHtml(state.currentUser.full_name)}</span><span>وحدة المتابعة الإدارية — كلية الشريعة</span></div>
 </div></body></html>`;
   const w = window.open('', '_blank');
