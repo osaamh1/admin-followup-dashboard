@@ -423,6 +423,10 @@
   .com-table td:first-child{text-align:right;} .com-row-actions{white-space:nowrap;}
   .com-reopen{color:var(--redd) !important;}
   .com-modal{max-width:640px;}
+  .com-view{max-width:900px;width:100%;padding:26px 28px;}
+  .com-view-head{display:flex;align-items:center;gap:16px;border-bottom:3px solid var(--teal);padding-bottom:14px;margin-bottom:14px;}
+  .com-view-head img{height:56px;} .com-view-head h3{margin:0;font-family:'Noto Kufi Arabic',sans-serif;font-size:19px;color:var(--seal-dark);} .com-view-head p{margin:4px 0 0;color:var(--ink-soft);font-size:13px;}
+  .com-view-dept{display:inline-block;background:var(--seal-dark);color:#fff;padding:6px 18px;border-radius:6px;font-weight:700;font-size:14px;margin-bottom:6px;}
   .circ-body{white-space:pre-wrap;line-height:2;font-size:14.5px;background:var(--paper);border-radius:6px;padding:16px 18px;max-height:55vh;overflow-y:auto;}
   .com-group{margin-top:14px;} .com-group-title{font-weight:700;color:var(--seal-dark);font-size:14px;margin-bottom:6px;} .com-group-title span{color:var(--ink-soft);font-weight:500;}
   .com-card-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;padding-top:10px;border-top:1px dashed var(--line);}
@@ -1185,6 +1189,21 @@ function openCommitteesManager(deptId, readOnly){
     </div>`;
   };
 
+  if(locked){
+    overlay.innerHTML = `
+      <style>${COM_TBL_CSS}</style>
+      <div class="modal com-modal com-view">
+        <div class="com-view-head"><img src="${LOGO_DATA_URI}" alt="شعار الكلية"><div><h3>${COM_REPORT_TITLE}</h3><p>كلية الشريعة — جامعة القصيم</p></div></div>
+        <div class="com-view-dept">${escapeHtml(dept ? dept.name : '')}</div>
+        <p class="com-meta">${comStatusChip(info)} · الموعد النهائي: ${escapeHtml(comFmtDate(circ.deadline))}</p>
+        ${comTableHtml(info)}
+        ${info.draftComs.length ? `<p class="com-hint">يوجد ${info.draftComs.length} لجنة لم تُرسل بعد، ولا تظهر في الجدول.</p>` : ''}
+        <div class="modal-actions"><button class="btn-ghost" id="comClose">إغلاق</button><button class="btn-primary" id="comPrint">🖨 طباعة / PDF</button></div>
+      </div>`;
+    document.getElementById('comClose').onclick = closeModal;
+    document.getElementById('comPrint').onclick = () => printDeptCommittees(deptId);
+    return;
+  }
   overlay.innerHTML = `
     <div class="modal modal-wide com-modal">
       <h3>📨 حصر اللجان — ${escapeHtml(dept ? dept.name : '')}</h3>
@@ -1369,18 +1388,7 @@ function generateCommitteesReport(){
   const grpMax = Math.max(1, grpCount('أ'), grpCount('ب'), grpCount('ج'));
 
   const deptBlocks = rows.map(r => {
-    const body = COM_GROUPS.map(g => {
-      const list = r.info.sentComs.filter(c => c.grp === g.k);
-      if(!list.length) return '';
-      return `<div class="grp-title"><span class="grp-badge g-${g.k === 'أ' ? 'a' : (g.k === 'ب' ? 'b' : 'c')}">${g.short}</span> ${g.label.split(': ')[1].replace(/\.$/, '')} <small>(${list.length})</small></div>
-        ${list.map(c => {
-          const ms = comMembersOf(c.id);
-          return `<div class="com-box"><div class="com-box-head"><b>${escapeHtml(c.name)}</b><span>${ms.length} عضو</span></div>
-          <table><thead><tr><th style="width:36px">#</th><th>العضو</th><th style="width:120px">طبيعة العضوية</th><th style="width:120px">جودة المشاركة</th></tr></thead><tbody>
-          ${ms.map((m, i) => `<tr><td>${i + 1}</td><td style="text-align:right;font-weight:600">${escapeHtml(m.member_name)}</td><td><span class="role ${roleCls(m.role)}">${escapeHtml(m.role)}</span></td><td>${qualCell(m.participation)}</td></tr>`).join('')}
-          </tbody></table></div>`;
-        }).join('')}`;
-    }).join('');
+    const body = comTableHtml(r.info);
     const tag = r.info.status === 'sent' ? '<span class="tag tag-ok">اكتمل الإرسال</span>' : (r.info.status === 'draft' ? `<span class="tag tag-warn">${r.info.draftComs.length} لجنة لم تُرسل</span>` : '<span class="tag tag-warn">لم يبدأ</span>');
     return `<details class="dept-block" open><summary class="dept-block-head"><span>${escapeHtml(r.d.name)} ${tag}</span><span class="dept-block-count">${r.info.sentComs.length} لجنة · ${r.info.sentMemCount} عضوية</span></summary>
       <div class="dept-body">${body || '<div class="empty-note">لا توجد لجان مُرسلة بعد.</div>'}</div></details>`;
@@ -1389,7 +1397,7 @@ function generateCommitteesReport(){
   const html = `<!DOCTYPE html>
 <html lang="ar" dir="rtl"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>تقرير حصر اللجان — ${escapeHtml(circ.subject || circ.title)}</title>
+<title>${COM_REPORT_TITLE}</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@500;700;900&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{--ink:#1C2321;--ink-soft:#4A524E;--paper:#EEEEE5;--line:#D7D3C5;--seal-dark:#12294F;--teal:#1C9E93;--teal-tint:#DEF3F1;--green:#2D6A4C;--green-tint:#DEEAE2;--redd:#C0392B;--redd-tint:#F7DCD8;--amber:#9C6B1E;--amber-tint:#F1E7D3;}
@@ -1450,6 +1458,7 @@ td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle;te
 .report-footer{margin-top:30px;padding-top:14px;border-top:2px solid var(--line);font-size:12px;color:var(--ink-soft);display:flex;justify-content:space-between;}
 .print-bar{max-width:920px;margin:0 auto 16px;display:flex;gap:10px;justify-content:flex-end;}
 .print-bar button{background:var(--seal-dark);color:#fff;border:none;padding:11px 20px;border-radius:6px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;} .print-bar .btn-alt{background:var(--teal);}
+${COM_TBL_CSS}
 @media (max-width:600px){.sheet{padding:22px 16px;} .report-header{flex-direction:column-reverse;align-items:flex-start;gap:10px;} .bar-name{flex-basis:84px;font-size:12.5px;}.summary-box{flex:1 1 40%;}}
 @media (prefers-reduced-motion:reduce){*{animation:none !important;}}
 @media print{html{background:#fff;} *{animation:none !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;} .print-bar,.tools{display:none;} body{padding:0;} .sheet{box-shadow:none;border-radius:0;max-width:none;}}
@@ -1459,7 +1468,7 @@ td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle;te
   <button class="btn-alt" onclick="if(window.opener&&window.opener.afuSaveReportHtml){window.opener.afuSaveReportHtml(document,'AFU-committees-report.html',this);}else{alert('أعد فتح التقرير من المنصة ثم احفظه.');}">💾 حفظ كملف تفاعلي (HTML)</button>
 </div>
 <div class="sheet">
-  <div class="report-header"><div><h1>تقرير حصر اللجان وأعضاء هيئة التدريس</h1><div class="report-sub">اللجان المُرسلة فقط · كلية الشريعة — جامعة القصيم · حتى ${escapeHtml(new Date().toLocaleDateString('ar-SA-u-ca-gregory'))}</div></div><img src="${LOGO_DATA_URI}" alt="شعار الكلية"></div>
+  <div class="report-header"><div><h1>${COM_REPORT_TITLE}</h1><div class="report-sub">اللجان المُرسلة فقط · كلية الشريعة — جامعة القصيم · حتى ${escapeHtml(new Date().toLocaleDateString('ar-SA-u-ca-gregory'))}</div></div><img src="${LOGO_DATA_URI}" alt="شعار الكلية"></div>
   <div class="summary-strip">
     <div class="summary-box"><div class="num cnt" style="--to:${nSent}">${nSent}</div><div class="lbl">أقسام أرسلت (من ${rows.length})</div></div>
     <div class="summary-box"><div class="num cnt" style="--to:${allComs.length}">${allComs.length}</div><div class="lbl">إجمالي اللجان</div></div>
@@ -1498,6 +1507,74 @@ td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle;te
 </div></body></html>`;
   const w = window.open('', '_blank');
   w.document.write(html); w.document.close();
+}
+
+
+// ----- جدول حصر أعمال اللجان (عرض الإدارة + التقرير + الطباعة) -----
+const COM_REPORT_TITLE = 'حصر أعمال اللجان في الأقسام العلمية';
+const COM_TBL_CSS = `
+.cmt-wrap{overflow-x:auto;border:1px solid #D7D3C5;border-radius:8px;}
+.cmt-table{width:100%;border-collapse:collapse;font-size:13.5px;background:#fff;min-width:620px;}
+.cmt-table th{background:#12294F;color:#fff;padding:10px 12px;font-size:12.5px;font-weight:700;text-align:center;white-space:nowrap;}
+.cmt-table td{padding:9px 12px;border-bottom:1px solid #E4E0D2;text-align:center;vertical-align:middle;}
+.cmt-table tr.cmt-first td{border-top:2px solid #C9C5B4;}
+.cmt-table tr:first-child td{border-top:none;}
+.cmt-table td.cmt-name{font-weight:700;color:#12294F;text-align:right;background:#F7F7F1;}
+.cmt-table td.cmt-mem{text-align:right;font-weight:600;}
+.cmt-table td.cmt-idx{background:#F7F7F1;color:#4A524E;font-weight:700;}
+.cmt-grp{display:inline-block;border-radius:6px;padding:2px 11px;font-size:12px;font-weight:700;color:#fff;white-space:nowrap;}
+.cmt-grp.g-a{background:#12294F;} .cmt-grp.g-b{background:#1C9E93;} .cmt-grp.g-c{background:#9C6B1E;}
+.cmt-role,.cmt-q{display:inline-block;border-radius:20px;padding:2px 12px;font-size:12px;font-weight:700;white-space:nowrap;}
+.cmt-role.r-head{background:#F1E7D3;color:#6F4710;} .cmt-role.r-sec{background:#DCE6F5;color:#12294F;} .cmt-role.r-mem{background:#EEEEE5;color:#4A524E;}
+.cmt-q.q-ok{background:#DEEAE2;color:#2D6A4C;} .cmt-q.q-no{background:#F7DCD8;color:#C0392B;} .cmt-q.q-na{color:#4A524E;}
+.cmt-empty{background:#EEEEE5;color:#4A524E;text-align:center;padding:24px;border-radius:8px;}
+`;
+function comTableHtml(info){
+  const sent = info.sentComs;
+  if(!sent.length) return '<div class="cmt-empty">لا توجد لجان مُرسلة بعد.</div>';
+  const roleCls = r => r === 'رئيس' ? 'r-head' : (r === 'أمين' ? 'r-sec' : 'r-mem');
+  const q = v => v === 'فاعل' ? '<span class="cmt-q q-ok">فاعل</span>' : (v === 'غير فاعل' ? '<span class="cmt-q q-no">غير فاعل</span>' : '<span class="cmt-q q-na">—</span>');
+  let n = 0, rows = '';
+  COM_GROUPS.forEach(g => {
+    sent.filter(c => c.grp === g.k).forEach(c => {
+      const ms = comMembersOf(c.id); n++;
+      const gc = g.k === 'أ' ? 'g-a' : (g.k === 'ب' ? 'g-b' : 'g-c');
+      if(!ms.length){ rows += `<tr class="cmt-first"><td class="cmt-idx">${n}</td><td class="cmt-name">${escapeHtml(c.name)}</td><td><span class="cmt-grp ${gc}">${g.short}</span></td><td colspan="3">—</td></tr>`; return; }
+      ms.forEach((m, i) => {
+        rows += `<tr class="${i === 0 ? 'cmt-first' : ''}">${i === 0 ? `<td class="cmt-idx" rowspan="${ms.length}">${n}</td><td class="cmt-name" rowspan="${ms.length}">${escapeHtml(c.name)}</td><td rowspan="${ms.length}"><span class="cmt-grp ${gc}">${g.short}</span></td>` : ''}<td class="cmt-mem">${escapeHtml(m.member_name)}</td><td><span class="cmt-role ${roleCls(m.role)}">${escapeHtml(m.role)}</span></td><td>${q(m.participation)}</td></tr>`;
+      });
+    });
+  });
+  return `<div class="cmt-wrap"><table class="cmt-table"><thead><tr><th style="width:44px">#</th><th>اسم اللجنة</th><th>فئة اللجنة</th><th>عضو هيئة التدريس</th><th>طبيعة العضوية</th><th>جودة المشاركة</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function printDeptCommittees(deptId){
+  const circ = comCircular(); if(!circ) return;
+  const dept = state.departments.find(d => String(d.id) === String(deptId));
+  const info = comDeptInfo(circ, deptId);
+  const html = `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${COM_REPORT_TITLE} — ${escapeHtml(dept ? dept.name : '')}</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@500;700;900&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;} html{background:linear-gradient(180deg,#DEF3F1 0%,#EEEEE5 320px);}
+body{font-family:'IBM Plex Sans Arabic',sans-serif;color:#1C2321;margin:0;padding:40px 24px;font-size:15px;line-height:1.7;}
+.sheet{max-width:920px;margin:0 auto;background:#fff;border-radius:10px;padding:34px 38px;box-shadow:0 8px 28px rgba(18,41,79,.12);border-top:6px solid #1C9E93;}
+.hd{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #1C9E93;padding-bottom:16px;margin-bottom:20px;}
+.hd img{height:64px;} h1{font-family:'Noto Kufi Arabic',sans-serif;font-size:22px;color:#12294F;margin:0;} .sub{color:#4A524E;font-size:13px;margin-top:6px;}
+.dept{display:inline-block;background:#12294F;color:#fff;padding:7px 20px;border-radius:6px;font-weight:700;font-size:14px;margin-bottom:18px;}
+.ft{margin-top:26px;padding-top:12px;border-top:2px solid #D7D3C5;font-size:12px;color:#4A524E;display:flex;justify-content:space-between;}
+.bar{max-width:920px;margin:0 auto 14px;text-align:left;} .bar button{background:#12294F;color:#fff;border:none;padding:10px 20px;border-radius:6px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;}
+${COM_TBL_CSS}
+@media print{html{background:#fff;} *{-webkit-print-color-adjust:exact;print-color-adjust:exact;} .bar{display:none;} body{padding:0;} .sheet{box-shadow:none;border-radius:0;max-width:none;} tr{break-inside:avoid;}}
+</style></head><body>
+<div class="bar"><button onclick="window.print()">🖨 طباعة / حفظ PDF</button></div>
+<div class="sheet">
+<div class="hd"><div><h1>${COM_REPORT_TITLE}</h1><div class="sub">كلية الشريعة — جامعة القصيم · ${escapeHtml(new Date().toLocaleDateString('ar-SA-u-ca-gregory'))}</div></div><img src="${LOGO_DATA_URI}" alt="شعار الكلية"></div>
+<div class="dept">${escapeHtml(dept ? dept.name : '')}</div>
+${comTableHtml(info)}
+<div class="ft"><span>أُعدّ بواسطة: ${escapeHtml(state.currentUser.full_name)}</span><span>وحدة المتابعة الإدارية — كلية الشريعة</span></div>
+</div></body></html>`;
+  const w = window.open('', '_blank'); w.document.write(html); w.document.close();
 }
 
 function renderShell(){
