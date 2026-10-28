@@ -408,6 +408,22 @@
 
   /* ===== الرسم البياني لإنجاز الأقسام ===== */
   .dept-chart-panel{margin-bottom:22px;}
+  /* ===== مركز التنبيهات ===== */
+  .bell-btn{position:relative;font-size:16px;padding:6px 14px;}
+  .bell-badge{position:absolute;top:-7px;left:-7px;min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:var(--redd);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;animation:bellPulse 1.8s ease-out infinite;}
+  .bell-btn.has-alerts{border-color:var(--redd);}
+  @keyframes bellPulse{0%{box-shadow:0 0 0 0 rgba(192,57,43,.7);}70%{box-shadow:0 0 0 9px rgba(192,57,43,0);}100%{box-shadow:0 0 0 0 rgba(192,57,43,0);}}
+  .bell-pop{position:fixed;top:70px;left:24px;width:min(380px,calc(100vw - 32px));max-height:70vh;overflow-y:auto;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 36px rgba(18,41,79,.25);z-index:60;}
+  .al-head{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--paper-raised);position:sticky;top:0;}
+  .al-sec{padding:10px 16px 4px;font-size:12.5px;font-weight:700;color:var(--ink-soft);}
+  .al-empty{padding:26px 16px;text-align:center;color:var(--ink-soft);}
+  .al-item{display:flex;gap:10px;align-items:flex-start;width:100%;text-align:right;background:none;border:none;border-bottom:1px solid var(--line);padding:10px 16px;cursor:pointer;}
+  .al-item:hover{background:var(--teal-tint);}
+  .al-ic{font-size:18px;line-height:1.4;} .al-tx{display:flex;flex-direction:column;gap:2px;font-size:13.5px;} .al-tx small{color:var(--ink-soft);font-size:12px;}
+  .al-today{color:var(--redd);} .al-soon{color:#8A5A12;}
+  .alert-toast{position:fixed;bottom:24px;left:24px;background:var(--seal-dark);color:#fff;padding:13px 20px;border-radius:10px;font-size:14px;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.3);z-index:70;opacity:0;transform:translateY(20px);pointer-events:none;transition:all .35s;}
+  .alert-toast.show{opacity:1;transform:none;}
+  @media (prefers-reduced-motion:reduce){.bell-badge{animation:none;}}
   /* ===== حصر اللجان ===== */
   .circ-panel{margin-bottom:22px;padding:18px 20px;border-right:4px solid var(--teal);}
   .com-meta{font-size:13.5px;color:var(--ink-soft);margin:6px 0;}
@@ -975,6 +991,9 @@ async function loadAll(){
   renderServicesArchive();
   renderRemoteArchive();
   renderScheduleManagement();
+  renderAlerts();
+  alertToastIfNew();
+  startAlertPolling();
 }
 
 function flagOverdueLocally(){
@@ -1590,6 +1609,110 @@ ${comTableHtml(info)}
   const w = window.open('', '_blank'); w.document.write(html); w.document.close();
 }
 
+// ============================================
+// مركز التنبيهات (الجرس 🔔): مهام جديدة + قرب انتهاء المهمة
+// ============================================
+const ALERT_NEAR_DAYS = 2;
+const ALERT_POLL_MS = 90 * 1000;
+function alertKey(){ return 'afu_alerts_seen_' + ((state.currentUser && (state.currentUser.email || state.currentUser.id)) || 'user'); }
+function alertLastSeen(){ try { return localStorage.getItem(alertKey()); } catch(e){ return null; } }
+function alertSetSeen(iso){ try { localStorage.setItem(alertKey(), iso); } catch(e){} }
+function computeAlerts(){
+  const today = riyadhParts().iso;
+  let seen = alertLastSeen();
+  if(!seen){ seen = new Date().toISOString(); alertSetSeen(seen); }
+  const seenMs = Date.parse(seen);
+  const fresh = (state.tasks || [])
+    .filter(t => t.created_at && Date.parse(t.created_at) > seenMs && t.status !== 'منتهية')
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+  const near = (state.tasks || [])
+    .filter(t => (t.status === 'جارية' || t.status === 'مرفوضة') && t.due_date)
+    .map(t => ({ t, d: Math.round((Date.parse(String(t.due_date).slice(0, 10) + 'T00:00:00Z') - Date.parse(today + 'T00:00:00Z')) / 86400000) }))
+    .filter(x => x.d >= 0 && x.d <= ALERT_NEAR_DAYS)
+    .sort((a, b) => a.d - b.d);
+  return { fresh, near, total: fresh.length + near.length };
+}
+function alertDeptLabel(t){
+  if(!t.department_id || state.currentUser.role === 'department') return '';
+  const d = state.departments.find(x => String(x.id) === String(t.department_id));
+  return d ? ' · ' + d.name : '';
+}
+function renderAlerts(){
+  const badge = document.getElementById('bellBadge');
+  const btn = document.getElementById('bellBtn');
+  if(!badge || !btn) return;
+  const a = computeAlerts();
+  badge.textContent = a.total > 99 ? '99+' : String(a.total);
+  badge.classList.toggle('hidden', a.total === 0);
+  btn.classList.toggle('has-alerts', a.total > 0);
+  const pop = document.getElementById('bellPop');
+  if(pop && !pop.classList.contains('hidden')) renderAlertPop();
+}
+function renderAlertPop(){
+  const pop = document.getElementById('bellPop');
+  if(!pop) return;
+  const a = computeAlerts();
+  const dayTxt = d => d === 0 ? '<b class="al-today">تنتهي اليوم</b>' : (d === 1 ? '<b class="al-soon">تنتهي غدًا</b>' : '<b class="al-soon">تنتهي بعد يومين</b>');
+  const fmtAdded = iso => { try { return new Date(iso).toLocaleString('ar-SA-u-ca-gregory', { timeZone:'Asia/Riyadh', weekday:'long', hour:'numeric', minute:'2-digit' }); } catch(e){ return ''; } };
+  pop.innerHTML = `
+    <div class="al-head"><b>🔔 التنبيهات</b>${a.fresh.length ? '<button class="btn-text" id="alReadBtn">تعليم الجديد كمقروء</button>' : ''}</div>
+    ${a.total === 0 ? '<div class="al-empty">لا توجد تنبيهات الآن ✅</div>' : ''}
+    ${a.fresh.length ? `<div class="al-sec">مهام جديدة (${a.fresh.length})</div>${a.fresh.map(t => `<button class="al-item" data-task="${escapeHtml(String(t.id))}"><span class="al-ic">🆕</span><span class="al-tx"><b>${escapeHtml(t.title)}</b><small>أُضيفت ${escapeHtml(fmtAdded(t.created_at))}${escapeHtml(alertDeptLabel(t))}${t.due_date ? ' · تنتهي ' + escapeHtml(String(t.due_date).slice(0, 10)) : ''}</small></span></button>`).join('')}` : ''}
+    ${a.near.length ? `<div class="al-sec">تقترب نهايتها (${a.near.length})</div>${a.near.map(x => `<button class="al-item" data-task="${escapeHtml(String(x.t.id))}"><span class="al-ic">⏰</span><span class="al-tx"><b>${escapeHtml(x.t.title)}</b><small>${dayTxt(x.d)}${escapeHtml(alertDeptLabel(x.t))}</small></span></button>`).join('')}` : ''}`;
+  const rb = document.getElementById('alReadBtn');
+  if(rb) rb.onclick = e => { e.stopPropagation(); alertSetSeen(new Date().toISOString()); renderAlerts(); renderAlertPop(); };
+  pop.querySelectorAll('[data-task]').forEach(b => b.onclick = () => {
+    const t = (state.tasks || []).find(x => String(x.id) === b.dataset.task);
+    pop.classList.add('hidden');
+    const input = document.getElementById('taskSearch');
+    if(t && input){ input.value = t.title; state.searchText = t.title; state.filterStatus = 'all'; const fs = document.getElementById('filterStatus'); if(fs) fs.value = 'all'; renderTasks(); }
+    const panel = document.querySelector('.tasks-panel');
+    if(panel) panel.scrollIntoView({ behavior:'smooth', block:'start' });
+  });
+}
+function toggleAlertPop(e){
+  if(e) e.stopPropagation();
+  const pop = document.getElementById('bellPop');
+  if(!pop) return;
+  if(pop.classList.contains('hidden')){ renderAlertPop(); pop.classList.remove('hidden'); }
+  else pop.classList.add('hidden');
+}
+function showAlertToast(msg){
+  let el = document.getElementById('alertToast');
+  if(!el){ el = document.createElement('div'); el.id = 'alertToast'; el.className = 'alert-toast'; document.body.appendChild(el); }
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(showAlertToast._t);
+  showAlertToast._t = setTimeout(() => el.classList.remove('show'), 7000);
+}
+function alertToastIfNew(){
+  const a = computeAlerts();
+  const ids = new Set(a.fresh.map(t => String(t.id)));
+  const prev = state.alertSeenIds || new Set();
+  const added = [...ids].filter(id => !prev.has(id));
+  state.alertSeenIds = ids;
+  if(added.length && (state.alertFirstDone || a.fresh.length)){
+    showAlertToast(`🔔 ${added.length === 1 ? 'مهمة جديدة' : added.length + ' مهام جديدة'} — اضغط الجرس للتفاصيل`);
+  }
+  state.alertFirstDone = true;
+}
+let alertPollTimer = null;
+function startAlertPolling(){
+  if(alertPollTimer) return;
+  alertPollTimer = setInterval(async () => {
+    try {
+      if(document.hidden || !state.currentUser) return;
+      const { data, error } = await sb.from('tasks').select('*').order('due_date', { ascending:true, nullsFirst:false });
+      if(error || !data) return;
+      state.tasks = data;
+      flagOverdueLocally();
+      const ov = document.getElementById('modalOverlay');
+      if(!ov || ov.classList.contains('hidden')){ renderStats(); renderTasks(); }
+      renderAlerts();
+      alertToastIfNew();
+    } catch(e){}
+  }, ALERT_POLL_MS);
+}
+
 function renderShell(){
   document.getElementById('app').innerHTML = `
     <div class="page">
@@ -1609,6 +1732,7 @@ function renderShell(){
           <div class="mast-controls">
             <button class="btn-ghost ${EDITOR_ROLES.includes(state.currentUser.role) ? '' : 'hidden'}" id="refreshOverdueBtn">تحديث الحالات المتأخرة</button>
             <button class="btn-ghost ${state.currentUser.role !== 'department' ? '' : 'hidden'}" id="pendingSummaryBtn">🗂️ ملخص للعميد</button>
+            <button class="btn-ghost bell-btn" id="bellBtn" aria-label="التنبيهات">🔔<span class="bell-badge hidden" id="bellBadge">0</span></button>
             <button class="btn-ghost" id="genReportBtn">📄 إصدار تقرير</button>
             <button class="btn-ghost" id="changePassBtn">🔒 تغيير كلمة المرور</button>
             <button class="logout-btn" id="logoutBtn">🚪 خروج</button>
@@ -1681,6 +1805,7 @@ function renderShell(){
       <details class="panel completed-panel" id="completedPanel"></details>
     </div>
     <div id="modalOverlay" class="modal-overlay hidden"></div>
+    <div id="bellPop" class="bell-pop hidden"></div>
   `;
 
   document.getElementById('todayDate').textContent = new Intl.DateTimeFormat('ar-SA',{year:'numeric',month:'long',day:'numeric'}).format(new Date());
@@ -1693,6 +1818,8 @@ function renderShell(){
   document.getElementById('logoutBtn').onclick = logout;
   document.getElementById('changePassBtn').onclick = openChangePasswordModal;
   document.getElementById('genReportBtn').onclick = openGenerateReportModal;
+  document.getElementById('bellBtn').onclick = toggleAlertPop;
+  document.addEventListener('click', ev => { const pop = document.getElementById('bellPop'); if(pop && !pop.classList.contains('hidden') && !pop.contains(ev.target)) pop.classList.add('hidden'); });
   document.getElementById('pendingSummaryBtn').onclick = generatePendingDecisionsSummary;
 }
 
