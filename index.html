@@ -1806,6 +1806,7 @@ function renderShell(){
           <div class="mast-controls">
             <button class="btn-ghost ${EDITOR_ROLES.includes(state.currentUser.role) ? '' : 'hidden'}" id="refreshOverdueBtn">تحديث الحالات المتأخرة</button>
             <button class="btn-ghost ${state.currentUser.role !== 'department' ? '' : 'hidden'}" id="pendingSummaryBtn">🗂️ ملخص للعميد</button>
+            <button class="btn-ghost ${(state.currentUser.role === 'department' || EDITOR_ROLES.includes(state.currentUser.role)) ? '' : 'hidden'}" id="staffAcctBtn">👤 ${state.currentUser.role === 'department' ? 'حساب الموظف/ـة' : 'حسابات الموظفين'}</button>
             <button class="btn-ghost bell-btn" id="bellBtn" aria-label="التنبيهات">🔔<span class="bell-badge hidden" id="bellBadge">0</span></button>
             <button class="btn-ghost" id="genReportBtn">📄 إصدار تقرير</button>
             <button class="btn-ghost" id="changePassBtn">🔒 تغيير كلمة المرور</button>
@@ -1897,6 +1898,12 @@ function renderShell(){
   document.getElementById('logoutBtn').onclick = logout;
   document.getElementById('changePassBtn').onclick = openChangePasswordModal;
   document.getElementById('genReportBtn').onclick = openGenerateReportModal;
+  document.getElementById('staffAcctBtn').onclick = ()=>{
+    const el = document.getElementById('staffAcctPanel');
+    if(!el) return;
+    el.classList.remove('hidden'); el.setAttribute('open', '');
+    el.scrollIntoView({ behavior:'smooth', block:'start' });
+  };
   document.getElementById('bellBtn').onclick = toggleAlertPop;
   document.addEventListener('click', ev => { const pop = document.getElementById('bellPop'); if(pop && !pop.classList.contains('hidden') && !pop.contains(ev.target)) pop.classList.add('hidden'); });
   document.getElementById('pendingSummaryBtn').onclick = generatePendingDecisionsSummary;
