@@ -466,6 +466,23 @@
   @keyframes comPulse{0%{box-shadow:0 0 0 0 rgba(28,158,147,.75);}70%{box-shadow:0 0 0 14px rgba(28,158,147,0);}100%{box-shadow:0 0 0 0 rgba(28,158,147,0);}}
   #circManageBtn{font-size:15.5px;padding:12px 24px;font-weight:700;}
   @media (prefers-reduced-motion:reduce){.com-pulse{animation:none;}}
+  body.staff-mode #statStrip, body.staff-mode #alertBanner, body.staff-mode #circPanel, body.staff-mode #deptChartPanel,
+  body.staff-mode #noAbsPanel, body.staff-mode .layout, body.staff-mode #servicesArchivePanel, body.staff-mode #remoteArchivePanel,
+  body.staff-mode #completedPanel, body.staff-mode #pendingSummaryBtn, body.staff-mode #refreshOverdueBtn,
+  body.staff-mode #genReportBtn, body.staff-mode #storageUsagePanel, body.staff-mode #scheduleManagementPanel,
+  body.staff-mode #staffAcctPanel{display:none !important;}
+  .staff-banner{background:#fff7e0;border:1.5px solid #e0b100;color:#6b4e00;padding:10px 14px;border-radius:4px;font-weight:700;margin:8px 0 12px;animation:comPulse 1.8s ease-out infinite;}
+  .staff-group{border:1px solid var(--line,#d8d8d8);border-radius:4px;padding:12px 14px;margin:10px 0;background:#fff;}
+  .staff-group h4{margin:0 0 6px;font-size:15px;}
+  .staff-line{font-size:13.5px;padding:4px 0;border-bottom:1px dashed #e3e3e3;display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+  .staff-line:last-of-type{border-bottom:0;}
+  .staff-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:flex-start;}
+  .staff-actions textarea{width:100%;min-height:60px;}
+  .st-chip{display:inline-block;font-size:12px;font-weight:700;padding:2px 9px;border-radius:3px;}
+  .st-chip.await{background:#fff1c9;color:#7a5a00;} .st-chip.ret{background:#fde2e0;color:#8c1d18;}
+  .st-chip.ok{background:#dff3ee;color:#0b5f57;} .st-chip.wait{background:#e8edf2;color:#34495e;}
+  .acct-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:8px 0;border-bottom:1px dashed #e3e3e3;font-size:13.5px;}
+
   .com-grp-opt{padding:14px 14px !important;}
   .com-addrow{display:flex;gap:8px;margin-top:8px;} .com-addrow select,.com-addrow input{flex:1;min-width:0;}
   .noabs-panel{margin-bottom:22px;}
@@ -691,8 +708,15 @@ const ROLE_LABELS = {
   dean: 'عميد الكلية',
   unit_secretary: 'أمين الوحدة',
   member: 'عضو اللجنة',
-  department: 'قسم علمي'
+  department: 'قسم علمي',
+  dept_staff: 'موظف قسم'
 };
+const ST_AWAIT = 'بانتظار رئيس القسم';
+const ST_RET = 'معاد للتعديل';
+const isDraftStatus = st => st === ST_AWAIT || st === ST_RET;
+const isDeptSide = r => r === 'department' || r === 'dept_staff';
+const isStaffUser = () => !!(state.currentUser && state.currentUser.role === 'dept_staff');
+const isEditableItem = it => isPendingItem(it) || isDraftStatus(it.status);
 const EDITOR_ROLES = ['admin', 'dean', 'unit_secretary', 'member'];
 const INACTIVITY_LIMIT_MS = 30 * 60 * 1000; // 30 دقيقة بدون حركة
 let inactivityTimer = null;
@@ -933,7 +957,7 @@ async function fetchAllCourseSchedule(){
 }
 
 async function loadAll(){
-  const [{data:tasks}, {data:decisions}, {data:departments}, {data:weeklyReports}, {data:absences}, {data:remoteRequests}, {data:courseSchedule}, {data:noAbsence}, {data:circulars}, {data:comSubs}, {data:committees}, {data:comMembers}] = await Promise.all([
+  const [{data:tasks}, {data:decisions}, {data:departments}, {data:weeklyReports}, {data:absences}, {data:remoteRequests}, {data:courseSchedule}, {data:noAbsence}, {data:circulars}, {data:comSubs}, {data:committees}, {data:comMembers}, {data:staffReqs}, {data:staffUsers}] = await Promise.all([
     sb.from('tasks').select('*').order('due_date', {ascending:true, nullsFirst:false}),
     sb.from('decisions').select('*').eq('status','active').order('decision_date', {ascending:false}),
     sb.from('departments').select('*').order('name'),
@@ -945,14 +969,21 @@ async function loadAll(){
     sb.from('circulars').select('*').order('id', {ascending:false}),
     sb.from('committee_submissions').select('*'),
     sb.from('committees').select('*').order('id'),
-    sb.from('committee_members').select('*').order('id').limit(5000)
+    sb.from('committee_members').select('*').order('id').limit(5000),
+    sb.from('staff_account_requests').select('*').order('created_at', {ascending:false}),
+    sb.from('app_users').select('*').eq('role','dept_staff')
   ]);
   state.tasks = tasks || [];
   state.decisions = decisions || [];
   state.departments = departments || [];
   state.weeklyReports = weeklyReports || [];
-  state.absences = absences || [];
-  state.remoteRequests = remoteRequests || [];
+  const _allAbs = absences || [], _allRem = remoteRequests || [];
+  state.absences = _allAbs.filter(a => !isDraftStatus(a.status));
+  state.staffAbs = _allAbs.filter(a => isDraftStatus(a.status));
+  state.remoteRequests = _allRem.filter(r => !isDraftStatus(r.status));
+  state.staffRem = _allRem.filter(r => isDraftStatus(r.status));
+  state.staffReqs = staffReqs || [];
+  state.staffUsers = staffUsers || [];
   state.courseSchedule = courseSchedule || [];
   state.noAbsence = noAbsence || [];
   state.circulars = circulars || [];
@@ -970,6 +1001,8 @@ async function loadAll(){
   renderNoAbsencePanel();
   renderCircularPanel();
   renderStorageUsage();
+  renderStaffPanel();
+  renderStaffAcctPanel();
   renderAbsences();
   renderRemoteRequests();
   renderServicesArchive();
@@ -1057,7 +1090,7 @@ function renderCircularPanel(){
   const panel = document.getElementById('circPanel');
   if(!panel) return;
   const circ = comCircular();
-  if(!comEnabled() || !circ || !state.currentUser){ panel.classList.add('hidden'); panel.innerHTML = ''; return; }
+  if(!comEnabled() || !circ || !state.currentUser || isStaffUser()){ panel.classList.add('hidden'); panel.innerHTML = ''; return; }
   panel.classList.remove('hidden');
   const left = comDaysLeft(circ);
   const leftTxt = left > 0 ? `المتبقي ${left} ${left === 1 ? 'يوم' : (left <= 10 ? 'أيام' : 'يومًا')}` : (left === 0 ? 'آخر يوم للإرسال اليوم' : 'انتهى الموعد');
@@ -1631,6 +1664,10 @@ function renderShell(){
 
       <section class="panel noabs-panel hidden" id="noAbsPanel"></section>
 
+      <details class="panel staff-acct-panel hidden" id="staffAcctPanel"></details>
+
+      <section class="panel staff-panel hidden" id="staffPanel"></section>
+
       <section class="panel absences-panel" id="absencesPanel"></section>
 
       <section class="panel remote-panel" id="remotePanel"></section>
@@ -1683,6 +1720,7 @@ function renderShell(){
     <div id="modalOverlay" class="modal-overlay hidden"></div>
   `;
 
+  document.body.classList.toggle('staff-mode', isStaffUser());
   document.getElementById('todayDate').textContent = new Intl.DateTimeFormat('ar-SA',{year:'numeric',month:'long',day:'numeric'}).format(new Date());
   document.getElementById('refreshOverdueBtn').onclick = refreshOverdue;
   document.getElementById('taskSearch').addEventListener('input', e=>{ state.searchText = e.target.value.trim(); renderTasks(); });
@@ -1773,6 +1811,7 @@ function deptName(id){
 function roleDisplayLabel(){
   const u = state.currentUser;
   if(u.role === 'department') return deptName(u.department_id);
+  if(u.role === 'dept_staff') return 'موظف — ' + deptName(u.department_id);
   return ROLE_LABELS[u.role] || u.role;
 }
 
@@ -2087,7 +2126,7 @@ async function withdrawRecord(table, id){
     await loadAll();
     return;
   }
-  if(!isPendingItem(cur)){
+  if(!isEditableItem(cur)){
     closeModal();
     alert('تم اتخاذ قرار على هذا الطلب، فلا يمكن حذفه الآن.');
     await loadAll();
@@ -2137,7 +2176,7 @@ function renderDeptChart(){
   const panel = document.getElementById('deptChartPanel');
   const role = state.currentUser.role;
 
-  if(role === 'department'){
+  if(isDeptSide(role)){
     panel.classList.add('hidden');
     panel.innerHTML = '';
     return;
@@ -2634,7 +2673,7 @@ const SHOW_NOABS_ADMIN_PANEL = false; // لوحة متابعة الأقسام ل
 function renderNoAbsencePanel(){
   const panel = document.getElementById('noAbsPanel');
   if(!panel) return;
-  if(!SHOW_NOABS_ADMIN_PANEL || !state.currentUser || state.currentUser.role === 'department'){
+  if(!SHOW_NOABS_ADMIN_PANEL || !state.currentUser || isDeptSide(state.currentUser.role)){
     panel.classList.add('hidden'); panel.innerHTML = ''; return;
   }
   panel.classList.remove('hidden');
@@ -2671,12 +2710,266 @@ function renderNoAbsencePanel(){
   if(selEl) selEl.onchange = e => { state.noAbsWeek = e.target.value; renderNoAbsencePanel(); };
 }
 
+// ============================================
+// موظفو الأقسام: طلبات بانتظار رئيس القسم + طلبات الحسابات
+// ============================================
+function staffUserName(email){
+  const u = (state.staffUsers || []).find(x => x.email === email);
+  return u ? u.full_name : (email || '—');
+}
+
+function staffGroups(){
+  const dept = state.currentUser.department_id;
+  const map = {};
+  const add = (row, kind) => {
+    if(String(row.department_id) !== String(dept)) return;
+    const k = kind + ':' + (row.batch_id || row.id);
+    (map[k] = map[k] || { key:k, kind, rows:[] }).rows.push(row);
+  };
+  (state.staffAbs || []).forEach(r => add(r, 'absence'));
+  (state.staffRem || []).forEach(r => add(r, 'remote'));
+  return Object.values(map).sort((a,b) => String(b.rows[0].created_at || '').localeCompare(String(a.rows[0].created_at || '')));
+}
+
+function promptReturnNote(onConfirm){
+  const overlay = document.getElementById('modalOverlay');
+  overlay.classList.remove('hidden');
+  overlay.innerHTML = `
+    <div class="modal">
+      <h3>إعادة الطلب للموظف للتعديل</h3>
+      <div class="field"><label>ملاحظتك للموظف <span class="required-mark">*</span></label><textarea id="retNoteInput" placeholder="اكتب ما المطلوب تعديله..."></textarea></div>
+      <p class="login-error hidden" id="retErr"></p>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="retCancel">إلغاء</button>
+        <button class="btn-primary" id="retConfirm">إعادة للموظف</button>
+      </div>
+    </div>`;
+  document.getElementById('retCancel').onclick = closeModal;
+  document.getElementById('retConfirm').onclick = async ()=>{
+    const note = document.getElementById('retNoteInput').value.trim();
+    if(!note){ const e = document.getElementById('retErr'); e.textContent = 'اكتب الملاحظة أولًا.'; e.classList.remove('hidden'); return; }
+    closeModal();
+    await onConfirm(note);
+  };
+}
+
+function staffTable(g){ return g.kind === 'absence' ? 'faculty_absences' : 'remote_lecture_requests'; }
+
+function renderStaffPanel(){
+  const panel = document.getElementById('staffPanel');
+  if(!panel) return;
+  const role = state.currentUser.role;
+  if(!isDeptSide(role)){ panel.classList.add('hidden'); panel.innerHTML = ''; return; }
+  const groups = staffGroups();
+  if(!groups.length){ panel.classList.add('hidden'); panel.innerHTML = ''; return; }
+  const isHead = role === 'department';
+  panel.classList.remove('hidden');
+  const awaiting = groups.filter(g => g.rows[0].status === ST_AWAIT).length;
+
+  const lineHtml = (g, r) => {
+    const txt = g.kind === 'absence'
+      ? `${escapeHtml(r.faculty_name)} · ${escapeHtml(r.course_name || '—')} · ${dualDateLabel(r.absence_date)} · ${escapeHtml(r.absence_time || '—')} · ${escapeHtml(r.absence_type || '')}`
+      : `${escapeHtml(r.faculty_name)} · ${escapeHtml(r.course_name || '—')} · ${dualDateLabel(r.lecture_date)} · ${escapeHtml(r.lecture_time || '—')}${r.justification ? ' · المبرر: ' + escapeHtml(r.justification) : ''}`;
+    const doc = r.document_path ? ` <a href="#" class="attach-link" id="stdoc-${r.id}">📎 ${escapeHtml(r.document_name || 'المستند')}</a>` : '';
+    const edit = (!isHead && isDraftStatus(r.status)) ? `<button class="edit-record-btn staff-edit" data-id="${r.id}" data-kind="${g.kind}">✏️ تعديل</button>` : '';
+    return `<div class="staff-line"><span>${txt}${doc}</span>${edit}</div>`;
+  };
+
+  const cards = groups.map((g, gi) => {
+    const st = g.rows[0].status;
+    const who = escapeHtml(staffUserName(g.rows[0].submitted_by));
+    const title = g.kind === 'absence' ? '📆 تقرير غياب' : '💻 طلب تحويل إلى عن بعد';
+    const chip = st === ST_AWAIT
+      ? `<span class="st-chip await">⏳ ${isHead ? 'بانتظار مرئياتك' : 'بانتظار رئيس القسم'}</span>`
+      : `<span class="st-chip ret">↩️ أُعيد للتعديل</span>`;
+    const retNote = (st === ST_RET && g.rows[0].decision_note) ? `<div class="rejection-note">ملاحظة رئيس القسم: ${escapeHtml(g.rows[0].decision_note)}</div>` : '';
+    let actions = '';
+    if(isHead && st === ST_AWAIT){
+      actions = `<div class="staff-actions">
+        <textarea class="staff-notes" data-gi="${gi}" placeholder="اكتب مرئياتك ومبرراتك هنا (مطلوبة قبل التحويل للوحدة)..."></textarea>
+        <button class="btn-primary staff-fwd" data-gi="${gi}">✅ اعتماد وتحويل للوحدة</button>
+        <button class="btn-ghost staff-ret" data-gi="${gi}">↩️ إعادة للموظف</button>
+      </div>`;
+    } else if(!isHead){
+      actions = `<div class="staff-actions">
+        ${st === ST_RET ? `<button class="btn-primary staff-resend" data-gi="${gi}">📤 إعادة الإرسال للرئيس</button>` : ''}
+        <button class="btn-ghost staff-del" data-gi="${gi}">🗑️ حذف الطلب كاملًا</button>
+      </div>`;
+    }
+    return `<div class="staff-group"><h4>${title} · من: ${who} ${chip}</h4>${retNote}${g.rows.map(r => lineHtml(g, r)).join('')}${actions}</div>`;
+  }).join('');
+
+  panel.innerHTML = `
+    <div class="panel-head"><h2>${isHead ? '📥 طلبات موظفي القسم' : '📤 طلباتي لدى رئيس القسم'}</h2></div>
+    ${isHead && awaiting ? `<div class="staff-banner">لديك ${awaiting} ${awaiting === 1 ? 'طلب' : 'طلبات'} بانتظار مرئياتك قبل تحويلها لوحدة المتابعة.</div>` : ''}
+    ${cards}`;
+
+  groups.forEach(g => g.rows.filter(r => r.document_path).forEach(async r => {
+    const el = document.getElementById('stdoc-' + r.id);
+    if(!el) return;
+    const { data, error } = await sb.storage.from('absence-documents').createSignedUrl(r.document_path, 3600);
+    if(!error && data){ el.href = data.signedUrl; el.target = '_blank'; }
+  }));
+
+  panel.querySelectorAll('.staff-fwd').forEach(btn => btn.onclick = async ()=>{
+    const g = groups[+btn.dataset.gi];
+    const notes = panel.querySelector(`.staff-notes[data-gi="${btn.dataset.gi}"]`).value.trim();
+    if(!notes){ alert('اكتب مرئياتك أولًا ثم حوّل الطلب للوحدة.'); return; }
+    btn.disabled = true;
+    const { error } = await sb.from(staffTable(g)).update({ status:'قيد المراجعة', head_notes:notes, decision_note:null }).in('id', g.rows.map(r => r.id));
+    if(error){ btn.disabled = false; alert('تعذر التحويل، حاول مرة أخرى.'); return; }
+    if(g.kind === 'absence'){ try{ await cancelNoAbsenceForDates(g.rows[0].department_id, g.rows.map(r => r.absence_date)); }catch(_){} }
+    await loadAll();
+  });
+  panel.querySelectorAll('.staff-ret').forEach(btn => btn.onclick = ()=>{
+    const g = groups[+btn.dataset.gi];
+    promptReturnNote(async (note)=>{
+      const { error } = await sb.from(staffTable(g)).update({ status:ST_RET, decision_note:note }).in('id', g.rows.map(r => r.id));
+      if(error) alert('تعذرت الإعادة، حاول مرة أخرى.');
+      await loadAll();
+    });
+  });
+  panel.querySelectorAll('.staff-resend').forEach(btn => btn.onclick = async ()=>{
+    const g = groups[+btn.dataset.gi];
+    const { error } = await sb.from(staffTable(g)).update({ status:ST_AWAIT, decision_note:null }).in('id', g.rows.map(r => r.id));
+    if(error) alert('تعذرت إعادة الإرسال، حاول مرة أخرى.');
+    await loadAll();
+  });
+  panel.querySelectorAll('.staff-del').forEach(btn => btn.onclick = async ()=>{
+    const g = groups[+btn.dataset.gi];
+    if(!confirm('حذف هذا الطلب كاملًا؟')) return;
+    const { error } = await sb.from(staffTable(g)).delete().in('id', g.rows.map(r => r.id));
+    if(error){ alert('تعذر الحذف، حاول مرة أخرى.'); return; }
+    const docs = g.rows.map(r => r.document_path).filter(Boolean);
+    if(docs.length) sb.storage.from('absence-documents').remove(docs).catch(()=>{});
+    await loadAll();
+  });
+  panel.querySelectorAll('.staff-edit').forEach(btn => btn.onclick = ()=>{
+    const pool = btn.dataset.kind === 'absence' ? state.staffAbs : state.staffRem;
+    const item = pool.find(x => String(x.id) === String(btn.dataset.id));
+    if(!item) return;
+    if(btn.dataset.kind === 'absence') openAddAbsenceModal(item); else openAddRemoteModal(item);
+  });
+}
+
+// ---------- طلبات حسابات الموظفين ----------
+const SAR_OPEN = ['بانتظار الاعتماد','معتمد'];
+function sarChip(r){
+  if(r.status === 'بانتظار الاعتماد') return '<span class="st-chip await">⏳ بانتظار اعتماد الوحدة</span>';
+  if(r.status === 'معتمد') return '<span class="st-chip wait">✅ معتمد — بانتظار تفعيل الحساب</span>';
+  if(r.status === 'تم التنفيذ') return '<span class="st-chip ok">✔️ تم التنفيذ</span>';
+  return '<span class="st-chip ret">❌ مرفوض</span>';
+}
+
+function openStaffAccountRequest(type, active){
+  const overlay = document.getElementById('modalOverlay');
+  overlay.classList.remove('hidden');
+  const needsPerson = type !== 'إيقاف';
+  const heading = type === 'إضافة' ? 'طلب إضافة حساب موظف/ـة إدخال بيانات'
+    : type === 'استبدال' ? 'طلب استبدال موظف/ـة إدخال البيانات' : 'طلب إيقاف حساب الموظف/ـة';
+  overlay.innerHTML = `
+    <div class="modal">
+      <h3>${heading}</h3>
+      ${needsPerson ? `
+        ${type === 'استبدال' && active ? `<p class="com-meta">سيُوقَف حساب «${escapeHtml(active.full_name)}» عند تفعيل الحساب الجديد.</p>` : ''}
+        <div class="field"><label>اسم الموظف/ـة <span class="required-mark">*</span></label><input id="sarName" type="text"></div>
+        <div class="field"><label>البريد الجامعي <span class="required-mark">*</span></label><input id="sarEmail" type="email" placeholder="name@qu.edu.sa" dir="ltr"></div>`
+      : `<p class="com-meta">سيُوقَف حساب «${escapeHtml(active ? active.full_name : '')}» (${escapeHtml(active ? active.email : '')}) بعد اعتماد الوحدة.</p>`}
+      <p class="login-error hidden" id="sarErr"></p>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="sarCancel">إلغاء</button>
+        <button class="btn-primary" id="sarSend">رفع الطلب للوحدة</button>
+      </div>
+    </div>`;
+  document.getElementById('sarCancel').onclick = closeModal;
+  document.getElementById('sarSend').onclick = async ()=>{
+    const errEl = document.getElementById('sarErr');
+    let name, email;
+    if(needsPerson){
+      name = document.getElementById('sarName').value.trim();
+      email = document.getElementById('sarEmail').value.trim().toLowerCase();
+      if(!name){ errEl.textContent = 'اكتب اسم الموظف/ـة.'; errEl.classList.remove('hidden'); return; }
+      if(!/^[^@\s]+@qu\.edu\.sa$/.test(email)){ errEl.textContent = 'اكتب البريد الجامعي بصيغة name@qu.edu.sa'; errEl.classList.remove('hidden'); return; }
+    } else { name = active.full_name; email = active.email; }
+    const btn = document.getElementById('sarSend'); btn.disabled = true;
+    const { error } = await sb.from('staff_account_requests').insert({
+      department_id: state.currentUser.department_id, request_type: type,
+      staff_name: name, staff_email: email, requested_by: state.currentUser.email, status: 'بانتظار الاعتماد'
+    });
+    if(error){ btn.disabled = false; errEl.textContent = 'تعذر رفع الطلب، حاول مرة أخرى.'; errEl.classList.remove('hidden'); return; }
+    closeModal();
+    await loadAll();
+    alert('تم رفع الطلب إلى وحدة المتابعة، وسيصلك القرار هنا.');
+  };
+}
+
+function renderStaffAcctPanel(){
+  const panel = document.getElementById('staffAcctPanel');
+  if(!panel) return;
+  const role = state.currentUser.role;
+  const isHead = role === 'department', isEd = EDITOR_ROLES.includes(role);
+  if(!isHead && !isEd){ panel.classList.add('hidden'); panel.innerHTML = ''; return; }
+  panel.classList.remove('hidden');
+  const reqs = state.staffReqs || [];
+  const users = state.staffUsers || [];
+
+  if(isHead){
+    const dept = state.currentUser.department_id;
+    const mine = reqs.filter(r => String(r.department_id) === String(dept));
+    const active = users.find(u => String(u.department_id) === String(dept));
+    const open = mine.find(r => SAR_OPEN.includes(r.status));
+    const btns = open ? '' : (active
+      ? `<button class="btn-ghost" id="sarReplace">🔁 طلب استبدال الموظف/ـة</button><button class="btn-ghost" id="sarStop">⛔ طلب إيقاف الحساب</button>`
+      : `<button class="btn-primary" id="sarAdd">➕ طلب إضافة حساب موظف/ـة</button>`);
+    panel.innerHTML = `
+      <summary>👤 حساب موظف/ـة إدخال البيانات في القسم</summary>
+      <div style="padding:10px 4px;">
+        <p class="com-meta">${active ? `الحساب المفعّل: <b>${escapeHtml(active.full_name)}</b> — <span dir="ltr">${escapeHtml(active.email)}</span>` : 'لا يوجد حساب موظف مفعّل لقسمك.'}</p>
+        ${open ? `<p class="com-meta">طلب جارٍ: ${escapeHtml(open.request_type)} — ${escapeHtml(open.staff_name || '')} ${sarChip(open)}</p>` : ''}
+        <div class="com-actions">${btns}</div>
+        ${mine.length ? `<div style="margin-top:8px;">${mine.slice(0,5).map(r => `<div class="acct-row"><span>${escapeHtml(r.request_type)}: ${escapeHtml(r.staff_name || '')}</span>${sarChip(r)}${r.decision_note ? `<span class="rejection-note">${escapeHtml(r.decision_note)}</span>` : ''}</div>`).join('')}</div>` : ''}
+      </div>`;
+    const b1 = document.getElementById('sarAdd'); if(b1) b1.onclick = ()=> openStaffAccountRequest('إضافة', null);
+    const b2 = document.getElementById('sarReplace'); if(b2) b2.onclick = ()=> openStaffAccountRequest('استبدال', active);
+    const b3 = document.getElementById('sarStop'); if(b3) b3.onclick = ()=> openStaffAccountRequest('إيقاف', active);
+    return;
+  }
+
+  const pending = reqs.filter(r => r.status === 'بانتظار الاعتماد');
+  const approved = reqs.filter(r => r.status === 'معتمد');
+  if(!reqs.length && !users.length){ panel.classList.add('hidden'); panel.innerHTML = ''; return; }
+  if(pending.length) panel.setAttribute('open', '');
+  const rowHtml = r => `<div class="acct-row">
+      <b>${escapeHtml(deptName(r.department_id))}</b><span>${escapeHtml(r.request_type)}: ${escapeHtml(r.staff_name || '')} <span dir="ltr">(${escapeHtml(r.staff_email || '')})</span></span>
+      ${sarChip(r)}
+      ${r.status === 'بانتظار الاعتماد' ? `<button class="decide-btn sar-ok" data-id="${r.id}">✅ اعتماد</button><button class="reject-btn sar-no" data-id="${r.id}">❌ رفض</button>` : ''}
+    </div>`;
+  panel.innerHTML = `
+    <summary>👤 طلبات حسابات موظفي الأقسام ${pending.length ? `<span class="badge-inline badge-pending">${pending.length} جديد</span>` : ''}</summary>
+    <div style="padding:10px 4px;">
+      ${pending.map(rowHtml).join('') || '<p class="com-meta">لا توجد طلبات بانتظار الاعتماد.</p>'}
+      ${approved.length ? `<p class="com-meta" style="margin-top:10px;">معتمدة بانتظار التفعيل:</p>${approved.map(rowHtml).join('')}` : ''}
+      ${users.length ? `<p class="com-meta" style="margin-top:10px;">الحسابات المفعّلة:</p>${users.map(u => `<div class="acct-row"><b>${escapeHtml(deptName(u.department_id))}</b><span>${escapeHtml(u.full_name)} <span dir="ltr">(${escapeHtml(u.email)})</span></span></div>`).join('')}` : ''}
+    </div>`;
+  panel.querySelectorAll('.sar-ok').forEach(btn => btn.onclick = async ()=>{
+    await sb.from('staff_account_requests').update({ status:'معتمد', decided_at:new Date().toISOString() }).eq('id', btn.dataset.id);
+    await loadAll();
+    alert('تم الاعتماد. سيُفعَّل الحساب بعد تنفيذه من مشرف النظام.');
+  });
+  panel.querySelectorAll('.sar-no').forEach(btn => btn.onclick = ()=>{
+    promptRejectionNote('رفض طلب حساب', async (note)=>{
+      await sb.from('staff_account_requests').update({ status:'مرفوض', decision_note:note, decided_at:new Date().toISOString() }).eq('id', btn.dataset.id);
+      await loadAll();
+    });
+  });
+}
+
 function renderAbsences(){
   const panel = document.getElementById('absencesPanel');
   const role = state.currentUser.role;
   const isFullEditor = EDITOR_ROLES.includes(role);
-  const scoped = role === 'department'
-    ? state.absences.filter(a => a.department_id === state.currentUser.department_id)
+  const scoped = isDeptSide(role)
+    ? state.absences.filter(a => a.department_id === state.currentUser.department_id && (role === 'department' || a.submitted_by === state.currentUser.email))
     : state.absences;
   const list = scoped.filter(a => isPendingItem(a) || isWithinGracePeriod(a.decided_at));
 
@@ -2685,14 +2978,14 @@ function renderAbsences(){
     if(item.status === 'مرفوض') return `<span class="badge-inline badge-rejected">❌ مرفوض</span>${item.decision_note ? `<div class="rejection-note">${escapeHtml(item.decision_note)}</div>` : ''}`;
     const editBtn = `<button class="edit-record-btn" data-id="${item.id}" data-kind="${kind}">✏️ تعديل</button><button class="withdraw-record-btn" data-id="${item.id}" data-kind="${kind}">🗑️ حذف الطلب</button>`;
     if(isFullEditor) return `<div class="decision-actions"><button class="decide-btn" data-id="${item.id}" data-kind="${kind}" data-action="مقبول">✅ قبول</button><button class="reject-btn" data-id="${item.id}" data-kind="${kind}">❌ رفض</button>${editBtn}</div>`;
-    return `<span class="badge-inline badge-pending">📋 قيد المراجعة</span> ${editBtn}`;
+    return `<span class="badge-inline badge-pending">📋 قيد المراجعة</span> ${isStaffUser() ? '' : editBtn}`;
   };
 
   const cardHtml = a => `
     <div class="record-card">
       <div class="record-card-head">
         <div class="record-card-title"><span class="rg-label">اسم العضو:</span> ${escapeHtml(a.faculty_name)}${a.course_name ? `<span class="record-card-sub">  <span class="rg-label">المادة:</span> ${escapeHtml(a.course_name)}</span>` : ''}</div>
-        ${role === 'department' ? '' : `<span class="record-card-dept">${escapeHtml(deptName(a.department_id))}</span>`}
+        ${isDeptSide(role) ? '' : `<span class="record-card-dept">${escapeHtml(deptName(a.department_id))}</span>`}
       </div>
       <div class="record-grid">
         <div><span class="rg-label">رقم الشعبة</span><span class="rg-value">${escapeHtml(a.section_number || '—')}</span></div>
@@ -2722,7 +3015,7 @@ function renderAbsences(){
     </div>`;
   }
 
-  const useAccordion = role !== 'department';
+  const useAccordion = !isDeptSide(role);
   const bodyHtml = list.length === 0
     ? `<div class="empty-note">لا توجد غيابات مسجّلة بعد.</div>`
     : (useAccordion
@@ -2787,8 +3080,8 @@ function renderRemoteRequests(){
   const panel = document.getElementById('remotePanel');
   const role = state.currentUser.role;
   const isFullEditor = EDITOR_ROLES.includes(role);
-  const scoped = role === 'department'
-    ? state.remoteRequests.filter(r => r.department_id === state.currentUser.department_id)
+  const scoped = isDeptSide(role)
+    ? state.remoteRequests.filter(r => r.department_id === state.currentUser.department_id && (role === 'department' || r.submitted_by === state.currentUser.email))
     : state.remoteRequests;
   const list = scoped.filter(r => isPendingItem(r) || isWithinGracePeriod(r.decided_at));
 
@@ -2797,14 +3090,14 @@ function renderRemoteRequests(){
     if(item.status === 'مرفوض') return `<span class="badge-inline badge-rejected">❌ مرفوض</span>${item.decision_note ? `<div class="rejection-note">${escapeHtml(item.decision_note)}</div>` : ''}`;
     const editBtn = `<button class="edit-record-btn" data-id="${item.id}" data-kind="${kind}">✏️ تعديل</button><button class="withdraw-record-btn" data-id="${item.id}" data-kind="${kind}">🗑️ حذف الطلب</button>`;
     if(isFullEditor) return `<div class="decision-actions"><button class="decide-btn" data-id="${item.id}" data-kind="${kind}" data-action="مقبول">✅ قبول</button><button class="reject-btn" data-id="${item.id}" data-kind="${kind}">❌ رفض</button>${editBtn}</div>`;
-    return `<span class="badge-inline badge-pending">📋 قيد المراجعة</span> ${editBtn}`;
+    return `<span class="badge-inline badge-pending">📋 قيد المراجعة</span> ${isStaffUser() ? '' : editBtn}`;
   };
 
   const cardHtml = r => `
     <div class="record-card">
       <div class="record-card-head">
         <div class="record-card-title"><span class="rg-label">اسم العضو:</span> ${escapeHtml(r.faculty_name)}${r.course_name ? `<span class="record-card-sub">  <span class="rg-label">المادة:</span> ${escapeHtml(r.course_name)}</span>` : ''}</div>
-        ${role === 'department' ? '' : `<span class="record-card-dept">${escapeHtml(deptName(r.department_id))}</span>`}
+        ${isDeptSide(role) ? '' : `<span class="record-card-dept">${escapeHtml(deptName(r.department_id))}</span>`}
       </div>
       <div class="record-grid">
         <div><span class="rg-label">تاريخ المحاضرة</span><span class="rg-value">${dualDateLabel(r.lecture_date)}</span></div>
@@ -2816,7 +3109,7 @@ function renderRemoteRequests(){
     </div>
   `;
 
-  const useAccordion = role !== 'department';
+  const useAccordion = !isDeptSide(role);
   const bodyHtml = list.length === 0
     ? `<div class="empty-note">لا توجد طلبات مسجّلة بعد.</div>`
     : (useAccordion
@@ -3188,6 +3481,7 @@ function openAddRemoteModal(editItem){
   };
 
   document.getElementById('remCancel').onclick = closeModal;
+  if(isStaffUser()){ const _n = document.getElementById('remNotes'); if(_n) _n.closest('.field').style.display = 'none'; }
   document.getElementById('remSave').onclick = async ()=>{
     const deptId = isFullEditor ? document.getElementById('remDept').value : state.currentUser.department_id;
     const errEl = document.getElementById('remErr');
@@ -3199,7 +3493,7 @@ function openAddRemoteModal(editItem){
     }
 
     const sharedNotes = document.getElementById('remNotes').value.trim();
-    if(!sharedNotes){
+    if(!sharedNotes && !isStaffUser()){
       errEl.textContent = 'لازم تكتب مرئيات رئيس القسم حيال الطلب قبل الحفظ.';
       errEl.classList.remove('hidden');
       return;
@@ -3278,7 +3572,7 @@ function openAddRemoteModal(editItem){
           lecture_date: lectureDate,
           lecture_time: lectureTime,
           justification: lecEl.querySelector('.remJustification').value.trim(),
-          head_notes: sharedNotes
+          head_notes: isStaffUser() ? null : sharedNotes
         });
       }
     }
@@ -3297,7 +3591,7 @@ function openAddRemoteModal(editItem){
     if(editItem){
       // نتأكد أن الطلب ما زال قيد المراجعة قبل التعديل (قد يكون المراجع اتخذ قرارًا أثناء فتح النموذج)
       const { data: cur } = await sb.from('remote_lecture_requests').select('status').eq('id', editItem.id).single();
-      if(cur && !isPendingItem(cur)){
+      if(cur && !isEditableItem(cur)){
         closeModal();
         alert('تم اتخاذ قرار على هذا الطلب، فلا يمكن تعديله الآن.');
         await loadAll();
@@ -3310,7 +3604,7 @@ function openAddRemoteModal(editItem){
         lecture_date: e.lecture_date,
         lecture_time: e.lecture_time,
         justification: e.justification,
-        head_notes: e.head_notes
+        ...(isStaffUser() ? {} : { head_notes: e.head_notes })
       }).eq('id', editItem.id);
       if(updErr){
         saveBtn.disabled = false;
@@ -3323,6 +3617,15 @@ function openAddRemoteModal(editItem){
       return;
     }
 
+    if(isStaffUser()){
+      const _bid = 'b' + Date.now() + Math.random().toString(36).slice(2,7);
+      entries.forEach(x => { x.status = ST_AWAIT; x.submitted_by = state.currentUser.email; x.batch_id = _bid; });
+      const { error: insErr } = await sb.from('remote_lecture_requests').insert(entries);
+      closeModal();
+      await loadAll();
+      alert(insErr ? 'تعذر إرسال الطلب، حاول مرة أخرى.' : 'تم رفع الطلب وأُرسل إلى رئيس القسم ليسجّل مرئياته.');
+      return;
+    }
     await sb.from('remote_lecture_requests').insert(entries);
     closeModal();
     await loadAll();
@@ -3625,6 +3928,7 @@ function openAddAbsenceModal(editItem){
   };
 
   document.getElementById('absCancel').onclick = closeModal;
+  if(isStaffUser()){ const _n = document.getElementById('absNotes'); if(_n) _n.closest('.field').style.display = 'none'; }
 
   document.getElementById('absSave').onclick = ()=>{
     const deptId = isFullEditor ? document.getElementById('absDept').value : state.currentUser.department_id;
@@ -3637,7 +3941,7 @@ function openAddAbsenceModal(editItem){
     }
 
     const sharedNotes = document.getElementById('absNotes').value.trim();
-    if(!sharedNotes){
+    if(!sharedNotes && !isStaffUser()){
       errEl.textContent = 'لازم تكتب مرئيات رئيس القسم بشأن التقرير قبل الحفظ.';
       errEl.classList.remove('hidden');
       return;
@@ -3748,7 +4052,7 @@ function openAddAbsenceModal(editItem){
             </div>
           </div>`).join('')}
       </div>
-      <div class="field" style="margin-top:14px;"><label>مرئيات رئيس القسم بشأن التقرير</label><div class="abs-review-notes">${escapeHtml(sharedNotes)}</div></div>
+      ${sharedNotes ? `<div class="field" style="margin-top:14px;"><label>مرئيات رئيس القسم بشأن التقرير</label><div class="abs-review-notes">${escapeHtml(sharedNotes)}</div></div>` : ''}
       <div class="modal-actions">
         <button class="btn-ghost" id="absBack">⬅ رجوع للتعديل</button>
         <button class="btn-primary" id="absConfirm">${editItem ? '✅ حفظ التعديل' : '✅ تأكيد الإرسال'}</button>
@@ -3794,7 +4098,7 @@ function openAddAbsenceModal(editItem){
             absence_type: lecEl.querySelector('.absType').value,
             document_path: documentPath,
             document_name: documentName,
-            head_notes: sharedNotes
+            head_notes: isStaffUser() ? null : sharedNotes
           });
         }
       }
@@ -3807,7 +4111,7 @@ function openAddAbsenceModal(editItem){
       if(editItem){
         // نتأكد أن التقرير ما زال قيد المراجعة قبل التعديل (قد يكون المراجع اتخذ قرارًا أثناء فتح النموذج)
         const { data: cur } = await sb.from('faculty_absences').select('status').eq('id', editItem.id).single();
-        if(cur && !isPendingItem(cur)){
+        if(cur && !isEditableItem(cur)){
           closeModal();
           alert('تم اتخاذ قرار على هذا التقرير، فلا يمكن تعديله الآن.');
           await loadAll();
@@ -3824,7 +4128,7 @@ function openAddAbsenceModal(editItem){
           absence_type: e.absence_type,
           document_path: e.document_path,
           document_name: e.document_name,
-          head_notes: e.head_notes
+          ...(isStaffUser() ? {} : { head_notes: e.head_notes })
         }).eq('id', editItem.id);
         if(updErr){
           confirmBtn.disabled = false;
@@ -3843,6 +4147,15 @@ function openAddAbsenceModal(editItem){
         return;
       }
 
+      if(isStaffUser()){
+        const _bid = 'b' + Date.now() + Math.random().toString(36).slice(2,7);
+        entries.forEach(x => { x.status = ST_AWAIT; x.submitted_by = state.currentUser.email; x.batch_id = _bid; });
+        const { error: insErr } = await sb.from('faculty_absences').insert(entries);
+        closeModal();
+        await loadAll();
+        alert(insErr ? 'تعذر إرسال التقرير، حاول مرة أخرى.' : 'تم رفع التقرير وأُرسل إلى رئيس القسم ليسجّل مرئياته.');
+        return;
+      }
       await sb.from('faculty_absences').insert(entries);
       // رفع غياب بتاريخ فيه إفادة "لا يوجد غياب" يلغي الإفادة تلقائيًا
       const cancelledNotes = [];
