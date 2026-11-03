@@ -1655,15 +1655,28 @@ function computeAlerts(){
   let seen = alertLastSeen();
   if(!seen){ seen = new Date().toISOString(); alertSetSeen(seen); }
   const seenMs = Date.parse(seen);
-  const fresh = (state.tasks || [])
+  const _tasks = isStaffUser() ? [] : (state.tasks || []);
+  const fresh = _tasks
     .filter(t => t.created_at && Date.parse(t.created_at) > seenMs && t.status !== 'منتهية')
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
-  const near = (state.tasks || [])
+  const near = _tasks
     .filter(t => (t.status === 'جارية' || t.status === 'مرفوضة') && t.due_date)
     .map(t => ({ t, d: Math.round((Date.parse(String(t.due_date).slice(0, 10) + 'T00:00:00Z') - Date.parse(today + 'T00:00:00Z')) / 86400000) }))
     .filter(x => x.d >= 0 && x.d <= ALERT_NEAR_DAYS)
     .sort((a, b) => a.d - b.d);
-  return { fresh, near, total: fresh.length + near.length };
+  const work = [];
+  const role = state.currentUser.role;
+  if(role === 'department'){
+    const n = staffGroups().filter(g => g.rows[0].status === ST_AWAIT).length;
+    if(n) work.push({ text:`${n} ${n === 1 ? 'طلب' : 'طلبات'} من موظفي القسم بانتظار مرئياتك`, goto:'staffPanel' });
+  } else if(role === 'dept_staff'){
+    const n = staffGroups().filter(g => g.rows[0].status === ST_RET).length;
+    if(n) work.push({ text:`${n} ${n === 1 ? 'طلب أعاده' : 'طلبات أعادها'} رئيس القسم إليك للتعديل`, goto:'staffPanel' });
+  } else if(EDITOR_ROLES.includes(role)){
+    const n = (state.staffReqs || []).filter(r => r.status === 'بانتظار الاعتماد').length;
+    if(n) work.push({ text:`${n} ${n === 1 ? 'طلب' : 'طلبات'} لحسابات موظفي الأقسام بانتظار اعتمادكم`, goto:'staffAcctPanel' });
+  }
+  return { fresh, near, work, total: fresh.length + near.length + work.length };
 }
 function alertDeptLabel(t){
   if(!t.department_id || state.currentUser.role === 'department') return '';
@@ -1690,10 +1703,16 @@ function renderAlertPop(){
   pop.innerHTML = `
     <div class="al-head"><b>🔔 التنبيهات</b>${a.fresh.length ? '<button class="btn-text" id="alReadBtn">تعليم الجديد كمقروء</button>' : ''}</div>
     ${a.total === 0 ? '<div class="al-empty">لا توجد تنبيهات الآن ✅</div>' : ''}
+    ${a.work.length ? `<div class="al-sec">مطلوب منك</div>${a.work.map(w => `<button class="al-item" data-goto="${w.goto}"><span class="al-title">${escapeHtml(w.text)}</span></button>`).join('')}` : ''}
     ${a.fresh.length ? `<div class="al-sec">مهام جديدة (${a.fresh.length})</div>${a.fresh.map(t => `<button class="al-item" data-task="${escapeHtml(String(t.id))}"><span class="al-ic">🆕</span><span class="al-tx"><b>${escapeHtml(t.title)}</b><small>أُضيفت ${escapeHtml(fmtAdded(t.created_at))}${escapeHtml(alertDeptLabel(t))}${t.due_date ? ' · تنتهي ' + escapeHtml(String(t.due_date).slice(0, 10)) : ''}</small></span></button>`).join('')}` : ''}
     ${a.near.length ? `<div class="al-sec">تقترب نهايتها (${a.near.length})</div>${a.near.map(x => `<button class="al-item" data-task="${escapeHtml(String(x.t.id))}"><span class="al-ic">⏰</span><span class="al-tx"><b>${escapeHtml(x.t.title)}</b><small>${dayTxt(x.d)}${escapeHtml(alertDeptLabel(x.t))}</small></span></button>`).join('')}` : ''}`;
   const rb = document.getElementById('alReadBtn');
   if(rb) rb.onclick = e => { e.stopPropagation(); alertSetSeen(new Date().toISOString()); renderAlerts(); renderAlertPop(); };
+  pop.querySelectorAll('[data-goto]').forEach(b => b.onclick = () => {
+    pop.classList.add('hidden');
+    const el = document.getElementById(b.dataset.goto);
+    if(el){ if(el.tagName === 'DETAILS') el.setAttribute('open', ''); el.scrollIntoView({ behavior:'smooth', block:'start' }); }
+  });
   pop.querySelectorAll('[data-task]').forEach(b => b.onclick = () => {
     const t = (state.tasks || []).find(x => String(x.id) === b.dataset.task);
     pop.classList.add('hidden');
@@ -1723,10 +1742,30 @@ function alertToastIfNew(){
   const prev = state.alertSeenIds || new Set();
   const added = [...ids].filter(id => !prev.has(id));
   state.alertSeenIds = ids;
+  const wk = a.work.map(w => w.text).join('|');
+  if(state.alertFirstDone && wk && wk !== state.alertWorkKey){ showAlertToast('🔔 ' + a.work[0].text + ' — اضغط الجرس'); }
+  state.alertWorkKey = wk;
   if(added.length && (state.alertFirstDone || a.fresh.length)){
     showAlertToast(`🔔 ${added.length === 1 ? 'مهمة جديدة' : added.length + ' مهام جديدة'} — اضغط الجرس للتفاصيل`);
   }
   state.alertFirstDone = true;
+}
+async function refreshStaffState(){
+  const role = state.currentUser.role;
+  if(role === 'department' || role === 'dept_staff'){
+    const [a, r] = await Promise.all([
+      sb.from('faculty_absences').select('*').in('status', [ST_AWAIT, ST_RET]),
+      sb.from('remote_lecture_requests').select('*').in('status', [ST_AWAIT, ST_RET])
+    ]);
+    if(a.data) state.staffAbs = a.data;
+    if(r.data) state.staffRem = r.data;
+  }
+  if(role === 'department' || EDITOR_ROLES.includes(role)){
+    const q = await sb.from('staff_account_requests').select('*').order('created_at', { ascending:false });
+    if(q.data) state.staffReqs = q.data;
+  }
+  const ov = document.getElementById('modalOverlay');
+  if(!ov || ov.classList.contains('hidden')){ renderStaffPanel(); renderStaffAcctPanel(); }
 }
 let alertPollTimer = null;
 function startAlertPolling(){
@@ -1738,6 +1777,7 @@ function startAlertPolling(){
       if(error || !data) return;
       state.tasks = data;
       flagOverdueLocally();
+      try{ await refreshStaffState(); }catch(_){}
       const ov = document.getElementById('modalOverlay');
       if(!ov || ov.classList.contains('hidden')){ renderStats(); renderTasks(); }
       renderAlerts();
