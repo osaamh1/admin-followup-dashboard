@@ -497,6 +497,7 @@
   .st-chip{display:inline-block;font-size:12px;font-weight:700;padding:2px 9px;border-radius:3px;}
   .st-chip.await{background:#fff1c9;color:#7a5a00;} .st-chip.ret{background:#fde2e0;color:#8c1d18;}
   .st-chip.ok{background:#dff3ee;color:#0b5f57;} .st-chip.wait{background:#e8edf2;color:#34495e;}
+  .staff-acct-panel>summary{font-weight:800;font-size:17px;cursor:pointer;color:var(--ink,#1a1a1a);}
   .acct-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:8px 0;border-bottom:1px dashed #e3e3e3;font-size:13.5px;}
 
   .com-grp-opt{padding:14px 14px !important;}
@@ -1017,8 +1018,8 @@ async function loadAll(){
   renderNoAbsencePanel();
   renderCircularPanel();
   renderStorageUsage();
-  renderStaffPanel();
-  renderStaffAcctPanel();
+  try{ renderStaffPanel(); }catch(e){ console.error('staffPanel', e); }
+  try{ renderStaffAcctPanel(); }catch(e){ console.error('staffAcctPanel', e); }
   renderAbsences();
   renderRemoteRequests();
   renderServicesArchive();
@@ -3087,7 +3088,8 @@ function renderStaffAcctPanel(){
     const open = mine.find(r => SAR_OPEN.includes(r.status));
     const btns = open ? '' : (active
       ? `<button class="btn-ghost" id="sarReplace">🔁 طلب استبدال الموظف/ـة</button><button class="btn-ghost" id="sarStop">⛔ طلب إيقاف الحساب</button>`
-      : `<button class="btn-primary" id="sarAdd">➕ طلب إضافة حساب موظف/ـة</button>`);
+      : `<button class="btn-primary com-pulse" id="sarAdd">➕ طلب إضافة حساب موظف/ـة</button>`);
+    if(!panel.dataset.init){ panel.setAttribute('open', ''); panel.dataset.init = '1'; }
     panel.innerHTML = `
       <summary>👤 حساب موظف/ـة إدخال البيانات في القسم</summary>
       <div style="padding:10px 4px;">
