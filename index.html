@@ -1899,6 +1899,13 @@ function renderShell(){
   document.getElementById('changePassBtn').onclick = openChangePasswordModal;
   document.getElementById('genReportBtn').onclick = openGenerateReportModal;
   document.getElementById('staffAcctBtn').onclick = ()=>{
+    if(state.currentUser.role === 'department'){
+      const dept = state.currentUser.department_id;
+      const open = (state.staffReqs || []).find(r => String(r.department_id) === String(dept) && SAR_OPEN.includes(r.status));
+      const active = (state.staffUsers || []).find(u => String(u.department_id) === String(dept));
+      if(!open && !active){ openStaffAccountRequest('إضافة', null); return; }
+      if(!open && active){ openStaffAccountChoice(active); return; }
+    }
     const el = document.getElementById('staffAcctPanel');
     if(!el) return;
     el.classList.remove('hidden'); el.setAttribute('open', '');
@@ -3036,6 +3043,24 @@ function sarChip(r){
   return '<span class="st-chip ret">❌ مرفوض</span>';
 }
 
+function openStaffAccountChoice(active){
+  const overlay = document.getElementById('modalOverlay');
+  overlay.classList.remove('hidden');
+  overlay.innerHTML = `
+    <div class="modal">
+      <h3>حساب الموظف/ـة في القسم</h3>
+      <p class="com-meta">الحساب المفعّل: <b>${escapeHtml(active.full_name)}</b> — <span dir="ltr">${escapeHtml(active.email)}</span></p>
+      <div class="modal-actions" style="flex-wrap:wrap;gap:8px;">
+        <button class="btn-ghost" id="scCancel">إغلاق</button>
+        <button class="btn-ghost" id="scStop">⛔ طلب إيقاف الحساب</button>
+        <button class="btn-primary" id="scRepl">🔁 طلب استبدال الموظف/ـة</button>
+      </div>
+    </div>`;
+  document.getElementById('scCancel').onclick = closeModal;
+  document.getElementById('scStop').onclick = ()=> openStaffAccountRequest('إيقاف', active);
+  document.getElementById('scRepl').onclick = ()=> openStaffAccountRequest('استبدال', active);
+}
+
 function openStaffAccountRequest(type, active){
   const overlay = document.getElementById('modalOverlay');
   overlay.classList.remove('hidden');
@@ -3049,11 +3074,11 @@ function openStaffAccountRequest(type, active){
         ${type === 'استبدال' && active ? `<p class="com-meta">سيُوقَف حساب «${escapeHtml(active.full_name)}» عند تفعيل الحساب الجديد.</p>` : ''}
         <div class="field"><label>اسم الموظف/ـة <span class="required-mark">*</span></label><input id="sarName" type="text"></div>
         <div class="field"><label>البريد الجامعي <span class="required-mark">*</span></label><input id="sarEmail" type="email" placeholder="name@qu.edu.sa" dir="ltr"></div>`
-      : `<p class="com-meta">سيُوقَف حساب «${escapeHtml(active ? active.full_name : '')}» (${escapeHtml(active ? active.email : '')}) بعد اعتماد الوحدة.</p>`}
+      : `<p class="com-meta">سيُوقَف حساب «${escapeHtml(active ? active.full_name : '')}» (${escapeHtml(active ? active.email : '')}) بعد اعتماد أمين اللجنة.</p>`}
       <p class="login-error hidden" id="sarErr"></p>
       <div class="modal-actions">
         <button class="btn-ghost" id="sarCancel">إلغاء</button>
-        <button class="btn-primary" id="sarSend">رفع الطلب للوحدة</button>
+        <button class="btn-primary" id="sarSend">رفع الطلب لأمين اللجنة</button>
       </div>
     </div>`;
   document.getElementById('sarCancel').onclick = closeModal;
@@ -3074,7 +3099,7 @@ function openStaffAccountRequest(type, active){
     if(error){ btn.disabled = false; errEl.textContent = 'تعذر رفع الطلب، حاول مرة أخرى.'; errEl.classList.remove('hidden'); return; }
     closeModal();
     await loadAll();
-    alert('تم رفع الطلب إلى وحدة المتابعة، وسيصلك القرار هنا.');
+    alert('تم رفع الطلب لأمين اللجنة، وسيصلك القرار هنا.');
   };
 }
 
