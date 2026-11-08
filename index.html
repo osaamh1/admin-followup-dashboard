@@ -490,6 +490,7 @@
   .notice-panel{margin-bottom:22px;padding:18px 20px;border-right:5px solid #e0b100;background:#fffdf4;}
   .notice-card+.notice-card{margin-top:16px;padding-top:12px;border-top:1px dashed #d8c98a;}
   .notice-card.acked{opacity:.92;}
+  .notice-callout{background:#fff1c9;border:1.5px solid #e0b100;color:#5c4300;font-weight:800;font-size:15px;padding:10px 14px;border-radius:4px;margin:8px 0 10px;line-height:1.8;}
   .notice-list{margin:6px 0 10px;padding-inline-start:22px;line-height:1.9;font-size:14px;}
   .staff-banner{background:#fff7e0;border:1.5px solid #e0b100;color:#6b4e00;padding:10px 14px;border-radius:4px;font-weight:700;margin:8px 0 12px;animation:comPulse 1.8s ease-out infinite;}
   .staff-group{border:1px solid var(--line,#d8d8d8);border-radius:4px;padding:12px 14px;margin:10px 0;background:#fff;}
@@ -3209,12 +3210,14 @@ function renderNoticePanel(){
   panel.classList.remove('hidden');
   const isHead = role === 'department';
   panel.innerHTML = list.map(circ => {
-    const items = noticeLines(circ);
+    const all = noticeLines(circ);
+    const callouts = all.filter(x => x.startsWith('!')).map(x => x.slice(1).trim());
+    const items = all.filter(x => !x.startsWith('!'));
     const head = items.length ? items[0] : '';
     const rest = items.slice(1);
     const fileBtn = circ.attachment_path ? `<button class="btn-ghost notice-file" data-id="${circ.id}">📎 عرض التعميم</button>` : '';
     const meta = `<p class="com-meta">صدر ${escapeHtml(comFmtDate(circ.issued_date))} · آخر موعد: <b>${escapeHtml(comFmtDate(circ.deadline))}</b> · ${noticeLeftHtml(circ)}</p>`;
-    const listHtml = `<p class="com-meta">${escapeHtml(head)}</p><ul class="notice-list">${rest.map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ul>`;
+    const listHtml = `<p class="com-meta">${escapeHtml(head)}</p>${callouts.map(x => `<div class="notice-callout">⏰ ${escapeHtml(x)}</div>`).join('')}${rest.length ? `<ul class="notice-list">${rest.map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ul>` : ''}`;
     if(isHead){
       const deptId = state.currentUser.department_id;
       const ack = noticeAck(circ, deptId);
