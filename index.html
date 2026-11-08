@@ -1676,7 +1676,7 @@ function computeAlerts(){
   const work = [];
   const role = state.currentUser.role;
   if(role === 'department'){
-    noticeList().filter(c => !noticeAck(c, state.currentUser.department_id)).forEach(c => work.push({ text:`تعميم جديد: ${c.subject || c.title} — اطّلع عليه وأكّد الاطلاع`, goto:'noticePanel' }));
+    noticeList().filter(c => { const st = noticeStage(c, state.currentUser.department_id); return st === 'none' || st === 'acked'; }).forEach(c => work.push({ text:`${comDaysLeft(c) < 0 ? 'متأخر: ' : 'تعميم جديد: '}${c.subject || c.title} — اطّلع وسلّم التقاويم للوحدة`, goto:'noticePanel' }));
     const n = staffGroups().filter(g => g.rows[0].status === ST_AWAIT).length;
     if(n) work.push({ text:`${n} ${n === 1 ? 'طلب' : 'طلبات'} من موظفي القسم بانتظار مرئياتك`, goto:'staffPanel' });
   } else if(role === 'dept_staff'){
@@ -3178,28 +3178,65 @@ function renderStaffAcctPanel(){
 
 // ============================================
 // التعاميم/التنبيهات العامة (kind = 'notice')
+// المراحل: اطّلع ← سلّم ← استُلمت
 // ============================================
 function noticeList(){ return (state.circulars || []).filter(c => c.kind === 'notice' && c.is_active); }
 function noticeAck(circ, deptId){
   return (state.noticeAcks || []).find(a => a.circular_id === circ.id && String(a.department_id) === String(deptId)) || null;
 }
+function noticeStage(circ, deptId){
+  const a = noticeAck(circ, deptId);
+  if(a && a.received_at) return 'received';
+  if(a && a.delivered_at) return 'delivered';
+  if(a && a.acked_at) return 'acked';
+  return 'none';
+}
 function noticeLeftHtml(circ){
   const left = comDaysLeft(circ);
-  if(left < 0) return '<b class="al-today">انتهى الموعد</b>';
+  if(left < 0) return '<b class="al-today">انتهى الموعد (ما بعده متأخر)</b>';
   if(left === 0) return '<b class="al-today">آخر يوم اليوم</b>';
-  return `<b class="${left <= 7 ? 'al-today' : 'al-soon'}">المتبقي ${left} ${left === 1 ? 'يوم' : (left <= 10 ? 'أيام' : 'يومًا')}</b>`;
+  return `<b class="${left <= 3 ? 'al-today' : 'al-soon'}">المتبقي ${left} ${left === 1 ? 'يوم' : (left <= 10 ? 'أيام' : 'يومًا')}</b>`;
 }
 function noticeLines(circ){
   return String(circ.body || '').split('\n').map(x => x.trim()).filter(Boolean);
 }
 function copyNoticeReminder(circ){
-  const pending = state.departments.filter(d => !noticeAck(circ, d.id));
-  if(!pending.length){ alert('جميع الأقسام أكدت الاطلاع ✅'); return; }
-  const txt = `السلام عليكم ورحمة الله وبركاته\nتنبيه: ${circ.subject || circ.title}\nآخر موعد لتسليم التقويم: ${comFmtDate(circ.deadline)}.\nيرجى الاطلاع على التعميم في منصة وحدة المتابعة الإدارية وتأكيد الاطلاع، وبدء إعداد التقاويم من خلال الخدمات الذاتية.\n\nالأقسام التي لم تؤكد الاطلاع بعد:\n` + pending.map(d => '• ' + d.name).join('\n') + '\n\nhttps://osaamh1.github.io/admin-followup-dashboard/';
+  const pending = state.departments.filter(d => { const st = noticeStage(circ, d.id); return st === 'none' || st === 'acked'; });
+  if(!pending.length){ alert('جميع الأقسام سلّمت التقاويم ✅'); return; }
+  const txt = `السلام عليكم ورحمة الله وبركاته\nتنبيه: ${circ.subject || circ.title}\nيرجى تسليم تقاويم منسوبي القسم (ورقيًا) لوحدة المتابعة قبل نهاية دوام ${comFmtDate(circ.deadline)}، وما بعده يُعدّ متأخرًا.\n\nالأقسام التي لم تسلّم بعد:\n` + pending.map(d => '• ' + d.name).join('\n') + '\n\nوللاطلاع على التعميم وتأكيد التسليم: https://osaamh1.github.io/admin-followup-dashboard/';
   const done = () => alert('تم نسخ نص التذكير، الصقه في واتساب.');
   if(navigator.clipboard && navigator.clipboard.writeText){
     navigator.clipboard.writeText(txt).then(done, () => window.prompt('انسخ النص:', txt));
   } else { window.prompt('انسخ النص:', txt); }
+}
+async function noticeSaveAck(circ, deptId, patch){
+  const row = noticeAck(circ, deptId);
+  if(row) return sb.from('circular_acks').update(patch).eq('id', row.id);
+  return sb.from('circular_acks').insert({ circular_id: circ.id, department_id: String(deptId), ...patch });
+}
+function openNoticeDeliver(circ){
+  const overlay = document.getElementById('modalOverlay');
+  overlay.classList.remove('hidden');
+  overlay.innerHTML = `
+    <div class="modal">
+      <h3>تأكيد تسليم تقاويم القسم</h3>
+      <p class="com-meta">أؤكد أنني سلّمت تقاويم منسوبي القسم (ورقيًا) لوحدة المتابعة.</p>
+      <div class="field"><label>عدد التقاويم المسلّمة (اختياري)</label><input id="ntCount" type="number" min="0" inputmode="numeric"></div>
+      <p class="login-error hidden" id="ntErr"></p>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="ntCancel">إلغاء</button>
+        <button class="btn-primary" id="ntOk">📨 تأكيد التسليم</button>
+      </div>
+    </div>`;
+  document.getElementById('ntCancel').onclick = closeModal;
+  document.getElementById('ntOk').onclick = async ()=>{
+    const v = document.getElementById('ntCount').value.trim();
+    const patch = { delivered_at: new Date().toISOString(), delivered_by: state.currentUser.full_name, delivered_count: v === '' ? null : Number(v) };
+    if(!noticeAck(circ, state.currentUser.department_id)){ patch.acked_at = patch.delivered_at; patch.acked_by = state.currentUser.full_name; }
+    const { error } = await noticeSaveAck(circ, state.currentUser.department_id, patch);
+    if(error){ const e = document.getElementById('ntErr'); e.textContent = 'تعذّر التسجيل، حاول مرة أخرى.'; e.classList.remove('hidden'); return; }
+    closeModal(); await loadAll();
+  };
 }
 function renderNoticePanel(){
   const panel = document.getElementById('noticePanel');
@@ -3216,27 +3253,44 @@ function renderNoticePanel(){
     const head = items.length ? items[0] : '';
     const rest = items.slice(1);
     const fileBtn = circ.attachment_path ? `<button class="btn-ghost notice-file" data-id="${circ.id}">📎 عرض التعميم</button>` : '';
-    const meta = `<p class="com-meta">صدر ${escapeHtml(comFmtDate(circ.issued_date))} · آخر موعد: <b>${escapeHtml(comFmtDate(circ.deadline))}</b> · ${noticeLeftHtml(circ)}</p>`;
+    const meta = `<p class="com-meta">صدر ${escapeHtml(comFmtDate(circ.issued_date))} · آخر موعد للتسليم: <b>${escapeHtml(comFmtDate(circ.deadline))}</b> · ${noticeLeftHtml(circ)}</p>`;
     const listHtml = `<p class="com-meta">${escapeHtml(head)}</p>${callouts.map(x => `<div class="notice-callout">⏰ ${escapeHtml(x)}</div>`).join('')}${rest.length ? `<ul class="notice-list">${rest.map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ul>` : ''}`;
+    const late = comDaysLeft(circ) < 0;
     if(isHead){
       const deptId = state.currentUser.department_id;
-      const ack = noticeAck(circ, deptId);
-      return `<div class="notice-card ${ack ? 'acked' : ''}" data-id="${circ.id}">
-        <div class="panel-head"><h2>📢 تعميم: ${escapeHtml(circ.subject || circ.title)}</h2>
-          ${ack ? '<span class="com-chip c-sent">✅ تم الاطلاع</span>' : '<span class="com-chip c-draft">بانتظار تأكيد اطلاعك</span>'}</div>
+      const st = noticeStage(circ, deptId);
+      const a = noticeAck(circ, deptId) || {};
+      const chip = st === 'received' ? '<span class="com-chip c-sent">✅ استلمت الوحدة التقاويم</span>'
+        : st === 'delivered' ? '<span class="com-chip c-sent">📨 تم التسليم — بانتظار استلام الوحدة</span>'
+        : (late ? '<span class="com-chip c-late">⏰ متأخر عن الموعد</span>' : (st === 'acked' ? '<span class="com-chip c-draft">اطّلعت — لم تُسلَّم التقاويم بعد</span>' : '<span class="com-chip c-draft">بانتظار اطلاعك</span>'));
+      const stamp = st === 'received' ? `استلمت الوحدة: ${escapeHtml(a.received_by || '')} · ${escapeHtml(comFmtTime(a.received_at))}`
+        : st === 'delivered' ? `سلّم: ${escapeHtml(a.delivered_by || '')} · ${escapeHtml(comFmtTime(a.delivered_at))}${a.delivered_count != null ? ` · عدد التقاويم: ${a.delivered_count}` : ''}` : '';
+      return `<div class="notice-card ${(st === 'delivered' || st === 'received') ? 'acked' : ''}" data-id="${circ.id}">
+        <div class="panel-head"><h2>📢 تعميم: ${escapeHtml(circ.subject || circ.title)}</h2>${chip}</div>
         ${meta}${listHtml}
         <div class="com-actions">
-          ${ack ? '' : `<button class="btn-primary com-pulse notice-ack" data-id="${circ.id}">✅ تم الاطلاع على التعميم</button>`}
+          ${(st === 'none') ? `<button class="btn-primary com-pulse notice-ack" data-id="${circ.id}">✅ تم الاطلاع على التعميم</button>` : ''}
+          ${(st === 'acked') ? `<button class="btn-primary com-pulse notice-deliver" data-id="${circ.id}">📨 تم تسليم التقاويم للوحدة</button>` : ''}
           ${fileBtn}
         </div>
-        ${ack ? `<p class="com-meta">أكّد الاطلاع: ${escapeHtml(ack.acked_by || '')} · ${escapeHtml(comFmtTime(ack.acked_at))}</p>` : ''}
+        ${stamp ? `<p class="com-meta">${stamp}</p>` : ''}
       </div>`;
     }
-    const rows = state.departments.map(d => ({ d, ack: noticeAck(circ, d.id) }));
-    const n = rows.filter(r => r.ack).length;
+    const rows = state.departments.map(d => ({ d, st: noticeStage(circ, d.id), a: noticeAck(circ, d.id) || {} }));
+    const nDel = rows.filter(r => r.st === 'delivered' || r.st === 'received').length;
+    const nRec = rows.filter(r => r.st === 'received').length;
+    const rowHtml = r => {
+      let chip;
+      if(r.st === 'received') chip = `<span class="st-chip ok">✅ استُلمت — ${escapeHtml(r.a.received_by || '')} · ${escapeHtml(comFmtTime(r.a.received_at))}${r.a.delivered_count != null ? ` · العدد: ${r.a.delivered_count}` : ''}</span>`;
+      else if(r.st === 'delivered') chip = `<span class="st-chip wait">📨 سلّم — ${escapeHtml(comFmtTime(r.a.delivered_at))}${r.a.delivered_count != null ? ` · العدد: ${r.a.delivered_count}` : ''}</span>`;
+      else if(late) chip = `<span class="st-chip ret">⏰ متأخر${r.st === 'acked' ? ' (اطّلع)' : ' (لم يطّلع)'}</span>`;
+      else chip = r.st === 'acked' ? '<span class="st-chip await">👁 اطّلع — لم يسلّم بعد</span>' : '<span class="st-chip await">⏳ لم يطّلع بعد</span>';
+      const btns = `${r.st !== 'received' ? `<button class="decide-btn notice-recv" data-id="${circ.id}" data-dept="${r.d.id}">📥 تم الاستلام</button>` : ''}${(r.st === 'delivered' || r.st === 'received') ? `<button class="btn-text notice-undo" data-id="${circ.id}" data-dept="${r.d.id}">↩️ تراجع</button>` : ''}`;
+      return `<div class="acct-row"><b>${escapeHtml(r.d.name)}</b>${chip}${btns}</div>`;
+    };
     return `<div class="notice-card" data-id="${circ.id}">
       <div class="panel-head"><h2>📢 متابعة تعميم: ${escapeHtml(circ.subject || circ.title)}</h2>
-        <span class="com-chip ${n === rows.length ? 'c-sent' : 'c-draft'}">اطّلع ${n} من ${rows.length} قسم</span></div>
+        <span class="com-chip ${nRec === rows.length ? 'c-sent' : 'c-draft'}">سلّم ${nDel} · استُلمت ${nRec} من ${rows.length} قسم</span></div>
       ${meta}${listHtml}
       <div class="com-actions">
         <button class="btn-ghost notice-attach" data-id="${circ.id}" id="circAttachBtn">${circ.attachment_path ? '🔄 استبدال التعميم' : '📎 إرفاق التعميم'}</button>
@@ -3244,7 +3298,7 @@ function renderNoticePanel(){
         <button class="btn-ghost notice-remind" data-id="${circ.id}">📋 نسخ تذكير واتساب</button>
         <button class="btn-ghost notice-off" data-id="${circ.id}">🔕 إيقاف التنبيه</button>
       </div>
-      <div style="margin-top:8px;">${rows.map(r => `<div class="acct-row"><b>${escapeHtml(r.d.name)}</b>${r.ack ? `<span class="st-chip ok">✅ اطّلع — ${escapeHtml(r.ack.acked_by || '')} · ${escapeHtml(comFmtTime(r.ack.acked_at))}</span>` : '<span class="st-chip await">⏳ لم يؤكد بعد</span>'}</div>`).join('')}</div>
+      <div style="margin-top:8px;">${rows.map(rowHtml).join('')}</div>
     </div>`;
   }).join('');
   const byId = id => list.find(c => String(c.id) === String(id));
@@ -3259,8 +3313,22 @@ function renderNoticePanel(){
   });
   panel.querySelectorAll('.notice-ack').forEach(b => b.onclick = async () => {
     b.disabled = true;
-    const { error } = await sb.from('circular_acks').insert({ circular_id: Number(b.dataset.id), department_id: String(state.currentUser.department_id), acked_by: state.currentUser.full_name });
+    const circ = byId(b.dataset.id);
+    const { error } = await noticeSaveAck(circ, state.currentUser.department_id, { acked_at: new Date().toISOString(), acked_by: state.currentUser.full_name });
     if(error && !/duplicate|unique/i.test(error.message || '')){ b.disabled = false; alert('تعذّر تسجيل الاطلاع، حاول مرة أخرى.'); return; }
+    await loadAll();
+  });
+  panel.querySelectorAll('.notice-deliver').forEach(b => b.onclick = () => openNoticeDeliver(byId(b.dataset.id)));
+  panel.querySelectorAll('.notice-recv').forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    const { error } = await noticeSaveAck(byId(b.dataset.id), b.dataset.dept, { received_at: new Date().toISOString(), received_by: state.currentUser.full_name });
+    if(error){ b.disabled = false; alert('تعذّر التسجيل.'); return; }
+    await loadAll();
+  });
+  panel.querySelectorAll('.notice-undo').forEach(b => b.onclick = async () => {
+    if(!confirm('التراجع عن حالة التسليم/الاستلام لهذا القسم؟')) return;
+    const { error } = await noticeSaveAck(byId(b.dataset.id), b.dataset.dept, { delivered_at: null, delivered_by: null, delivered_count: null, received_at: null, received_by: null });
+    if(error){ alert('تعذّر التراجع.'); return; }
     await loadAll();
   });
 }
