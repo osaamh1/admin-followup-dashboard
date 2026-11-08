@@ -486,7 +486,11 @@
   body.staff-mode #noAbsPanel, body.staff-mode .layout, body.staff-mode #servicesArchivePanel, body.staff-mode #remoteArchivePanel,
   body.staff-mode #completedPanel, body.staff-mode #pendingSummaryBtn, body.staff-mode #refreshOverdueBtn,
   body.staff-mode #genReportBtn, body.staff-mode #storageUsagePanel, body.staff-mode #scheduleManagementPanel,
-  body.staff-mode #staffAcctPanel{display:none !important;}
+  body.staff-mode #staffAcctPanel, body.staff-mode #noticePanel{display:none !important;}
+  .notice-panel{margin-bottom:22px;padding:18px 20px;border-right:5px solid #e0b100;background:#fffdf4;}
+  .notice-card+.notice-card{margin-top:16px;padding-top:12px;border-top:1px dashed #d8c98a;}
+  .notice-card.acked{opacity:.92;}
+  .notice-list{margin:6px 0 10px;padding-inline-start:22px;line-height:1.9;font-size:14px;}
   .staff-banner{background:#fff7e0;border:1.5px solid #e0b100;color:#6b4e00;padding:10px 14px;border-radius:4px;font-weight:700;margin:8px 0 12px;animation:comPulse 1.8s ease-out infinite;}
   .staff-group{border:1px solid var(--line,#d8d8d8);border-radius:4px;padding:12px 14px;margin:10px 0;background:#fff;}
   .staff-group h4{margin:0 0 6px;font-size:15px;}
@@ -974,7 +978,7 @@ async function fetchAllCourseSchedule(){
 }
 
 async function loadAll(){
-  const [{data:tasks}, {data:decisions}, {data:departments}, {data:weeklyReports}, {data:absences}, {data:remoteRequests}, {data:courseSchedule}, {data:noAbsence}, {data:circulars}, {data:comSubs}, {data:committees}, {data:comMembers}, {data:staffReqs}, {data:staffUsers}] = await Promise.all([
+  const [{data:tasks}, {data:decisions}, {data:departments}, {data:weeklyReports}, {data:absences}, {data:remoteRequests}, {data:courseSchedule}, {data:noAbsence}, {data:circulars}, {data:comSubs}, {data:committees}, {data:comMembers}, {data:staffReqs}, {data:staffUsers}, {data:noticeAcks}] = await Promise.all([
     sb.from('tasks').select('*').order('due_date', {ascending:true, nullsFirst:false}),
     sb.from('decisions').select('*').eq('status','active').order('decision_date', {ascending:false}),
     sb.from('departments').select('*').order('name'),
@@ -988,7 +992,8 @@ async function loadAll(){
     sb.from('committees').select('*').order('id'),
     sb.from('committee_members').select('*').order('id').limit(5000),
     sb.from('staff_account_requests').select('*').order('created_at', {ascending:false}),
-    sb.from('app_users').select('*').eq('role','dept_staff')
+    sb.from('app_users').select('*').eq('role','dept_staff'),
+    sb.from('circular_acks').select('*')
   ]);
   state.tasks = tasks || [];
   state.decisions = decisions || [];
@@ -1004,6 +1009,7 @@ async function loadAll(){
   state.courseSchedule = courseSchedule || [];
   state.noAbsence = noAbsence || [];
   state.circulars = circulars || [];
+  state.noticeAcks = noticeAcks || [];
   state.comSubs = comSubs || [];
   state.committees = committees || [];
   state.comMembers = comMembers || [];
@@ -1016,6 +1022,7 @@ async function loadAll(){
   // renderWeeklyPanel(); // تم إخفاء خدمة "تقارير داعمة" من الواجهة (البيانات محفوظة، يمكن إعادة تفعيلها لاحقًا)
   renderDeptChart();
   renderNoAbsencePanel();
+  try{ renderNoticePanel(); }catch(e){ console.error('noticePanel', e); }
   renderCircularPanel();
   renderStorageUsage();
   try{ renderStaffPanel(); }catch(e){ console.error('staffPanel', e); }
@@ -1065,7 +1072,7 @@ const COM_GROUPS = [
   { k:'ب', short:'فرعية (ب)', label:'المجموعة (ب): اللجان الفرعية' },
   { k:'ج', short:'صغيرة (ج)', label:'المجموعة (ج): اللجان الصغيرة' }
 ];
-function comCircular(){ return (state.circulars || []).find(c => c.is_active) || null; }
+function comCircular(){ return (state.circulars || []).find(c => c.is_active && (c.kind || 'committees') === 'committees') || null; }
 function comDeptCommittees(circId, deptId){
   return (state.committees || []).filter(c => c.circular_id === circId && String(c.department_id) === String(deptId));
 }
@@ -1668,6 +1675,7 @@ function computeAlerts(){
   const work = [];
   const role = state.currentUser.role;
   if(role === 'department'){
+    noticeList().filter(c => !noticeAck(c, state.currentUser.department_id)).forEach(c => work.push({ text:`تعميم جديد: ${c.subject || c.title} — اطّلع عليه وأكّد الاطلاع`, goto:'noticePanel' }));
     const n = staffGroups().filter(g => g.rows[0].status === ST_AWAIT).length;
     if(n) work.push({ text:`${n} ${n === 1 ? 'طلب' : 'طلبات'} من موظفي القسم بانتظار مرئياتك`, goto:'staffPanel' });
   } else if(role === 'dept_staff'){
@@ -1821,6 +1829,8 @@ function renderShell(){
       <details class="panel schedule-mgmt-panel hidden" id="scheduleManagementPanel"></details>
 
       <section id="alertBanner" class="alert-banner hidden"></section>
+
+      <section class="panel notice-panel hidden" id="noticePanel"></section>
 
       <section class="panel circ-panel hidden" id="circPanel"></section>
 
@@ -3162,6 +3172,93 @@ function renderStaffAcctPanel(){
       await sb.from('staff_account_requests').update({ status:'مرفوض', decision_note:note, decided_at:new Date().toISOString() }).eq('id', btn.dataset.id);
       await loadAll();
     });
+  });
+}
+
+// ============================================
+// التعاميم/التنبيهات العامة (kind = 'notice')
+// ============================================
+function noticeList(){ return (state.circulars || []).filter(c => c.kind === 'notice' && c.is_active); }
+function noticeAck(circ, deptId){
+  return (state.noticeAcks || []).find(a => a.circular_id === circ.id && String(a.department_id) === String(deptId)) || null;
+}
+function noticeLeftHtml(circ){
+  const left = comDaysLeft(circ);
+  if(left < 0) return '<b class="al-today">انتهى الموعد</b>';
+  if(left === 0) return '<b class="al-today">آخر يوم اليوم</b>';
+  return `<b class="${left <= 7 ? 'al-today' : 'al-soon'}">المتبقي ${left} ${left === 1 ? 'يوم' : (left <= 10 ? 'أيام' : 'يومًا')}</b>`;
+}
+function noticeLines(circ){
+  return String(circ.body || '').split('\n').map(x => x.trim()).filter(Boolean);
+}
+function copyNoticeReminder(circ){
+  const pending = state.departments.filter(d => !noticeAck(circ, d.id));
+  if(!pending.length){ alert('جميع الأقسام أكدت الاطلاع ✅'); return; }
+  const txt = `السلام عليكم ورحمة الله وبركاته\nتنبيه: ${circ.subject || circ.title}\nآخر موعد لتسليم التقويم: ${comFmtDate(circ.deadline)}.\nيرجى الاطلاع على التعميم في منصة وحدة المتابعة الإدارية وتأكيد الاطلاع، وبدء إعداد التقاويم من خلال الخدمات الذاتية.\n\nالأقسام التي لم تؤكد الاطلاع بعد:\n` + pending.map(d => '• ' + d.name).join('\n') + '\n\nhttps://osaamh1.github.io/admin-followup-dashboard/';
+  const done = () => alert('تم نسخ نص التذكير، الصقه في واتساب.');
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(done, () => window.prompt('انسخ النص:', txt));
+  } else { window.prompt('انسخ النص:', txt); }
+}
+function renderNoticePanel(){
+  const panel = document.getElementById('noticePanel');
+  if(!panel) return;
+  const list = noticeList();
+  const role = state.currentUser && state.currentUser.role;
+  if(!list.length || !role || isStaffUser()){ panel.classList.add('hidden'); panel.innerHTML = ''; return; }
+  panel.classList.remove('hidden');
+  const isHead = role === 'department';
+  panel.innerHTML = list.map(circ => {
+    const items = noticeLines(circ);
+    const head = items.length ? items[0] : '';
+    const rest = items.slice(1);
+    const fileBtn = circ.attachment_path ? `<button class="btn-ghost notice-file" data-id="${circ.id}">📎 عرض التعميم</button>` : '';
+    const meta = `<p class="com-meta">صدر ${escapeHtml(comFmtDate(circ.issued_date))} · آخر موعد: <b>${escapeHtml(comFmtDate(circ.deadline))}</b> · ${noticeLeftHtml(circ)}</p>`;
+    const listHtml = `<p class="com-meta">${escapeHtml(head)}</p><ul class="notice-list">${rest.map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ul>`;
+    if(isHead){
+      const deptId = state.currentUser.department_id;
+      const ack = noticeAck(circ, deptId);
+      return `<div class="notice-card ${ack ? 'acked' : ''}" data-id="${circ.id}">
+        <div class="panel-head"><h2>📢 تعميم: ${escapeHtml(circ.subject || circ.title)}</h2>
+          ${ack ? '<span class="com-chip c-sent">✅ تم الاطلاع</span>' : '<span class="com-chip c-draft">بانتظار تأكيد اطلاعك</span>'}</div>
+        ${meta}${listHtml}
+        <div class="com-actions">
+          ${ack ? '' : `<button class="btn-primary com-pulse notice-ack" data-id="${circ.id}">✅ تم الاطلاع على التعميم</button>`}
+          ${fileBtn}
+        </div>
+        ${ack ? `<p class="com-meta">أكّد الاطلاع: ${escapeHtml(ack.acked_by || '')} · ${escapeHtml(comFmtTime(ack.acked_at))}</p>` : ''}
+      </div>`;
+    }
+    const rows = state.departments.map(d => ({ d, ack: noticeAck(circ, d.id) }));
+    const n = rows.filter(r => r.ack).length;
+    return `<div class="notice-card" data-id="${circ.id}">
+      <div class="panel-head"><h2>📢 متابعة تعميم: ${escapeHtml(circ.subject || circ.title)}</h2>
+        <span class="com-chip ${n === rows.length ? 'c-sent' : 'c-draft'}">اطّلع ${n} من ${rows.length} قسم</span></div>
+      ${meta}${listHtml}
+      <div class="com-actions">
+        <button class="btn-ghost notice-attach" data-id="${circ.id}" id="circAttachBtn">${circ.attachment_path ? '🔄 استبدال التعميم' : '📎 إرفاق التعميم'}</button>
+        ${fileBtn}
+        <button class="btn-ghost notice-remind" data-id="${circ.id}">📋 نسخ تذكير واتساب</button>
+        <button class="btn-ghost notice-off" data-id="${circ.id}">🔕 إيقاف التنبيه</button>
+      </div>
+      <div style="margin-top:8px;">${rows.map(r => `<div class="acct-row"><b>${escapeHtml(r.d.name)}</b>${r.ack ? `<span class="st-chip ok">✅ اطّلع — ${escapeHtml(r.ack.acked_by || '')} · ${escapeHtml(comFmtTime(r.ack.acked_at))}</span>` : '<span class="st-chip await">⏳ لم يؤكد بعد</span>'}</div>`).join('')}</div>
+    </div>`;
+  }).join('');
+  const byId = id => list.find(c => String(c.id) === String(id));
+  panel.querySelectorAll('.notice-file').forEach(b => b.onclick = () => openCircularFile(byId(b.dataset.id)));
+  panel.querySelectorAll('.notice-attach').forEach(b => b.onclick = () => uploadCircularFile(byId(b.dataset.id)));
+  panel.querySelectorAll('.notice-remind').forEach(b => b.onclick = () => copyNoticeReminder(byId(b.dataset.id)));
+  panel.querySelectorAll('.notice-off').forEach(b => b.onclick = async () => {
+    if(!confirm('إيقاف هذا التنبيه؟ سيختفي من صفحات رؤساء الأقسام.')) return;
+    const { error } = await sb.from('circulars').update({ is_active:false }).eq('id', Number(b.dataset.id));
+    if(error){ alert('تعذّر الإيقاف.'); return; }
+    await loadAll();
+  });
+  panel.querySelectorAll('.notice-ack').forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    const { error } = await sb.from('circular_acks').insert({ circular_id: Number(b.dataset.id), department_id: String(state.currentUser.department_id), acked_by: state.currentUser.full_name });
+    if(error && !/duplicate|unique/i.test(error.message || '')){ b.disabled = false; alert('تعذّر تسجيل الاطلاع، حاول مرة أخرى.'); return; }
+    await loadAll();
   });
 }
 
