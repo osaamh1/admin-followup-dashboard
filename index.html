@@ -3293,7 +3293,7 @@ function renderNoticePanel(){
         <span class="com-chip ${nRec === rows.length ? 'c-sent' : 'c-draft'}">سلّم ${nDel} · استُلمت ${nRec} من ${rows.length} قسم</span></div>
       ${meta}${listHtml}
       <div class="com-actions">
-        <button class="btn-ghost notice-attach" data-id="${circ.id}" id="circAttachBtn">${circ.attachment_path ? '🔄 استبدال التعميم' : '📎 إرفاق التعميم'}</button>
+        <button class="btn-ghost notice-attach" data-id="${circ.id}">${circ.attachment_path ? '🔄 استبدال التعميم' : '📎 إرفاق التعميم'}</button>
         ${fileBtn}
         <button class="btn-ghost notice-remind" data-id="${circ.id}">📋 نسخ تذكير واتساب</button>
         <button class="btn-ghost notice-off" data-id="${circ.id}">🔕 إيقاف التنبيه</button>
